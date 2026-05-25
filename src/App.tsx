@@ -3,6 +3,7 @@ import { fundCalc, fundInputs } from "./data/fund-calc";
 import fundTrades from "./data/fund-trades.json";
 import fundBanks from "./data/fund-banks.json";
 import fundInvestorSubscriptions from "./data/fund-investor-subscriptions.json";
+import fundTradeSummary from "./data/fund-trade-summary.json";
 
 type Lang = "mn" | "en";
 type Role = "board_member" | "fund_manager";
@@ -12,7 +13,6 @@ type FundManagerTab =
   | "trades"
   | "bank"
   | "new_trades"
-  | "realized_pnl"
   | "users"
   | "settings";
 
@@ -164,10 +164,15 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.fmSidebar.signout": "Гарах",
     "internal.fmTabs.nav": "Цэвэр хөрөнгийн үнэлгээ",
     "internal.fmTabs.portfolio": "Багцын бүтэц",
-    "internal.fmTabs.trades": "Идэвхтэй үнэт цаасны түүх",
+    "internal.fmTabs.trades": "Арилжааны түүх",
     "internal.fmTabs.bank": "Арилжааны банк",
     "internal.fmTabs.newTrades": "Арилжаа хийх",
-    "internal.fmTabs.realized": "Арилжааны түүх",
+    "internal.trades.segActive": "Идэвхтэй",
+    "internal.trades.segInactive": "Идэвхгүй",
+    "internal.trades.activeStocks": "Идэвхтэй хувьцаа",
+    "internal.trades.activeOptions": "Идэвхтэй опцион",
+    "internal.trades.inactiveStocks": "Идэвхгүй хувьцаа",
+    "internal.trades.inactiveOptions": "Идэвхгүй опцион",
     "internal.fmTabs.users": "Хэрэглэгчид",
     "internal.fmTabs.settings": "Тохиргоо",
     "internal.page.nav.title": "Цэвэр хөрөнгийн үнэлгээ",
@@ -181,6 +186,25 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.portfolio.bondsSub": "Хуримтлагдсан хүүтэйгээр.",
     "internal.portfolio.equitiesTitle": "Хувьцаа & опцион",
     "internal.portfolio.equitiesSub": "Зах зээлийн үнэлгээгээр эрэмбэлэв.",
+    "internal.portfolio.stocksTitle": "Хувьцаа",
+    "internal.portfolio.stocksSub": "Валютаар бүлэглэв.",
+    "internal.portfolio.optionsTitle": "Опцион",
+    "internal.portfolio.optionsSub": "Худалдан авсан үнэт цаасны опцион.",
+    "internal.portfolio.edit": "Засах",
+    "internal.portfolio.bondAdd": "Бонд нэмэх",
+    "internal.trades.stockAdd": "Хувьцаа нэмэх",
+    "internal.portfolio.bondModal.title": "Шинэ бонд бүртгэх",
+    "internal.portfolio.bondModal.ticker": "Тикер",
+    "internal.portfolio.bondModal.name": "Нэр",
+    "internal.portfolio.bondModal.yield": "Жилийн хүү (%)",
+    "internal.portfolio.bondModal.qty": "Тоо ширхэг",
+    "internal.portfolio.bondModal.value": "Үнэлгээ (MNT)",
+    "internal.portfolio.bondModal.purchaseInterest": "Худалдан авсан үед төлсөн хүү (MNT)",
+    "internal.portfolio.bondModal.purchaseDate": "Худалдан авсан огноо",
+    "internal.portfolio.bondModal.paymentDate": "Хүү төлөх огноо",
+    "internal.portfolio.bondModal.maturityDate": "Дуусах огноо",
+    "internal.portfolio.bondModal.submit": "Хадгалах",
+    "internal.portfolio.bondModal.cancel": "Болих",
     "internal.portfolio.colTicker": "Тикер",
     "internal.portfolio.colName": "Нэр",
     "internal.portfolio.colCurrency": "Валют",
@@ -200,7 +224,7 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.portfolio.colAllocation": "Хувь",
     "internal.portfolio.colAmount": "Дүн",
     "internal.portfolio.colMntValue": "MNT-ээр",
-    "internal.nav.todayLabel": "Өнөөдрийн NAV",
+    "internal.nav.todayLabel": "Өнөөдрийн нэгж эрхийн үнэлгээ",
     "internal.nav.statusPublished": "Нийтлэгдсэн",
     "internal.nav.statusDraft": "Батлагдаагүй",
     "internal.nav.statusRejected": "Татгалзсан",
@@ -217,12 +241,13 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.nav.breakdownTitle": "Цэвэр хөрөнгийн задаргаа",
     "internal.nav.breakdownSub": "Позици, FX ханш, өр төлбөрөөс шууд тооцов.",
     "internal.nav.brEquities": "Хувьцаа (зах зээлийн үнэлгээ)",
+    "internal.nav.brOptions": "Опцион (зах зээлийн үнэлгээ)",
     "internal.nav.brBonds": "Бонд (хуримтлагдсан хүүтэй)",
     "internal.nav.brCash": "Бэлэн мөнгө",
     "internal.nav.brLiabilities": "Өр төлбөр (хуримтлагдсан шимтгэл)",
     "internal.nav.brNet": "Цэвэр хөрөнгө",
     "internal.nav.brUnits": "Эзэмшигчийн идэвхтэй нэгж эрх",
-    "internal.nav.brPerUnit": "Нэгж эрхийн үнэлгээ (NAV / unit)",
+    "internal.nav.brPerUnit": "Нэгж эрхийн үнэлгээ",
     "internal.page.trades.title": "Арилжааны бүртгэл",
     "internal.page.trades.subtitle": "Худалдан авсан хувьцаа, арилжааны түүх.",
     "internal.page.bank.title": "Банкны данс",
@@ -257,7 +282,7 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.navHistory.change": "Өөрчлөлт",
     "internal.realized.title": "Биелсэн ашиг, алдагдал",
     "internal.realized.total": "Нийт хүлээн авсан ашиг алдагдал",
-    "internal.realized.winRate": "Амжилтын хувь",
+    "internal.realized.winRate": "Ашиг & Алдагдал %",
     "internal.realized.best": "Шилдэг арилжаа",
     "internal.realized.asset": "Актив",
     "internal.realized.pnl": "P&L",
@@ -279,6 +304,7 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.users.colActive": "Идэвхтэй",
     "internal.users.colSubs": "Гүйлгээ",
     "internal.users.colPurchased": "Худалдан авсан",
+    "internal.users.colType": "Төрөл",
     "internal.users.subsOne": "гүйлгээ",
     "internal.users.subsMany": "гүйлгээ",
     "internal.users.title": "Менежерүүдийн жагсаалт",
@@ -393,10 +419,15 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.fmSidebar.signout": "Sign out",
     "internal.fmTabs.nav": "NAV",
     "internal.fmTabs.portfolio": "Portfolio",
-    "internal.fmTabs.trades": "Trades",
+    "internal.fmTabs.trades": "Trade history",
     "internal.fmTabs.bank": "Bank",
     "internal.fmTabs.newTrades": "New Trades",
-    "internal.fmTabs.realized": "Sold Stocks' P&L",
+    "internal.trades.segActive": "Active",
+    "internal.trades.segInactive": "Closed",
+    "internal.trades.activeStocks": "Active stocks",
+    "internal.trades.activeOptions": "Active options",
+    "internal.trades.inactiveStocks": "Closed stocks",
+    "internal.trades.inactiveOptions": "Closed options",
     "internal.fmTabs.users": "Users",
     "internal.fmTabs.settings": "Settings",
     "internal.page.nav.title": "Net Asset Value",
@@ -410,6 +441,25 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.portfolio.bondsSub": "Carried with accrued interest.",
     "internal.portfolio.equitiesTitle": "Equities & options",
     "internal.portfolio.equitiesSub": "Sorted by market value.",
+    "internal.portfolio.stocksTitle": "Stocks",
+    "internal.portfolio.stocksSub": "Grouped by trading currency.",
+    "internal.portfolio.optionsTitle": "Options",
+    "internal.portfolio.optionsSub": "Equity options.",
+    "internal.portfolio.edit": "Edit",
+    "internal.portfolio.bondAdd": "Add bond",
+    "internal.trades.stockAdd": "Add stock",
+    "internal.portfolio.bondModal.title": "Register new bond",
+    "internal.portfolio.bondModal.ticker": "Ticker",
+    "internal.portfolio.bondModal.name": "Name",
+    "internal.portfolio.bondModal.yield": "Annual yield (%)",
+    "internal.portfolio.bondModal.qty": "Quantity",
+    "internal.portfolio.bondModal.value": "Value (MNT)",
+    "internal.portfolio.bondModal.purchaseInterest": "Interest paid at purchase (MNT)",
+    "internal.portfolio.bondModal.purchaseDate": "Purchase date",
+    "internal.portfolio.bondModal.paymentDate": "Coupon payment date",
+    "internal.portfolio.bondModal.maturityDate": "Maturity date",
+    "internal.portfolio.bondModal.submit": "Save",
+    "internal.portfolio.bondModal.cancel": "Cancel",
     "internal.portfolio.colTicker": "Ticker",
     "internal.portfolio.colName": "Name",
     "internal.portfolio.colCurrency": "Currency",
@@ -429,7 +479,7 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.portfolio.colAllocation": "Allocation",
     "internal.portfolio.colAmount": "Amount",
     "internal.portfolio.colMntValue": "MNT value",
-    "internal.nav.todayLabel": "Today's NAV",
+    "internal.nav.todayLabel": "Today's NAV / unit",
     "internal.nav.statusPublished": "Published",
     "internal.nav.statusDraft": "Pending review",
     "internal.nav.statusRejected": "Rejected",
@@ -445,13 +495,14 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.nav.trendSub": "NAV movement across recent trading days.",
     "internal.nav.breakdownTitle": "Net Asset breakdown",
     "internal.nav.breakdownSub": "Computed live from positions, FX rates, and liabilities.",
-    "internal.nav.brEquities": "Equities (market value)",
+    "internal.nav.brEquities": "Stocks (market value)",
+    "internal.nav.brOptions": "Options (market value)",
     "internal.nav.brBonds": "Bonds (with accrued interest)",
     "internal.nav.brCash": "Cash",
     "internal.nav.brLiabilities": "Liabilities (accrued management fees)",
     "internal.nav.brNet": "Net Assets",
     "internal.nav.brUnits": "Total Units Outstanding",
-    "internal.nav.brPerUnit": "NAV / unit",
+    "internal.nav.brPerUnit": "Unit value",
     "internal.page.trades.title": "Trade History",
     "internal.page.trades.subtitle": "Stocks the fund has bought and the trade confirmation log.",
     "internal.page.bank.title": "Bank accounts",
@@ -486,7 +537,7 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.navHistory.change": "Change",
     "internal.realized.title": "Realized Profit & Loss",
     "internal.realized.total": "Total Realized P&L",
-    "internal.realized.winRate": "Win Rate",
+    "internal.realized.winRate": "P&L %",
     "internal.realized.best": "Best Trade",
     "internal.realized.asset": "Asset",
     "internal.realized.pnl": "P&L",
@@ -508,6 +559,7 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.users.colActive": "Active",
     "internal.users.colSubs": "Subscriptions",
     "internal.users.colPurchased": "Purchased",
+    "internal.users.colType": "Type",
     "internal.users.subsOne": "subscription",
     "internal.users.subsMany": "subscriptions",
     "internal.users.title": "Manager directory",
@@ -671,38 +723,6 @@ const initialTradeConfirmations: TradeConfirmation[] = (fundTrades as Array<Reco
   }))
   .filter((t) => t.ticker && t.tradeDate)
   .sort((a, b) => (a.tradeDate < b.tradeDate ? 1 : -1));
-
-const tradeExportColumns: Array<{ label: string; value: (trade: TradeConfirmation) => string | number }> = [
-  { label: "Security type", value: (trade) => trade.securityType },
-  { label: "TYPE", value: (trade) => trade.type },
-  { label: "Currency", value: (trade) => trade.currency },
-  { label: "Date - trade", value: (trade) => trade.tradeDate },
-  { label: "Date - settle", value: (trade) => trade.settleDate },
-  { label: "Security name", value: (trade) => trade.securityName },
-  { label: "Ticker", value: (trade) => trade.ticker },
-  { label: "Inst. Type", value: (trade) => trade.instrumentType },
-  { label: "Portfolio class", value: (trade) => trade.portfolioClass },
-  { label: "Quantity", value: (trade) => trade.quantity },
-  { label: "Unit price", value: (trade) => trade.unitPrice },
-  { label: "SEC total", value: (trade) => trade.secTotal },
-  { label: "Fee perc.", value: (trade) => trade.feePerc },
-  { label: "Fee amount", value: (trade) => trade.feeAmount },
-  { label: "Fixed fee", value: (trade) => trade.fixedFee },
-  { label: "Total fee", value: (trade) => trade.totalFee },
-  { label: "Total", value: (trade) => trade.total },
-  { label: "Exchange rate", value: (trade) => trade.exchangeRate },
-  { label: "Total USD", value: (trade) => trade.totalUsd },
-  { label: "Stock split", value: (trade) => trade.stockSplit },
-  { label: "Description", value: (trade) => trade.description }
-];
-
-function escapeCsv(value: string | number) {
-  const raw = String(value ?? "");
-  if (/[",\n]/.test(raw)) {
-    return `"${raw.replace(/"/g, '""')}"`;
-  }
-  return raw;
-}
 
 function readLangFromQuery(): Lang | null {
   const params = new URLSearchParams(window.location.search);
@@ -952,14 +972,6 @@ function tabIcon(id: FundManagerTab): ReactElement {
           <path d="M5 12h14" />
         </svg>
       );
-    case "realized_pnl":
-      return (
-        <svg {...common} aria-hidden="true">
-          <circle cx="12" cy="12" r="9" />
-          <path d="M15 9.5a3 3 0 0 0-3-1.5c-1.7 0-3 .9-3 2.2 0 1.2 1 1.8 3 2.3 2 .5 3 1.1 3 2.3 0 1.3-1.3 2.2-3 2.2a3 3 0 0 1-3-1.5" />
-          <path d="M12 6.5v11" />
-        </svg>
-      );
     case "users":
       return (
         <svg {...common} aria-hidden="true">
@@ -998,6 +1010,75 @@ export default function App() {
   const [navApproval, setNavApproval] = useState<NavApproval | null>(null);
   const [expandedTickers, setExpandedTickers] = useState<Set<string>>(new Set());
   const [usersSegment, setUsersSegment] = useState<"workers" | "investors">("workers");
+  const [tradesSegment, setTradesSegment] = useState<"active" | "inactive">("active");
+  const [bondFormOpen, setBondFormOpen] = useState(false);
+  type AddedBond = {
+    ticker: string;
+    name: string;
+    yield: number;
+    qty: number;
+    value: number;
+    purchaseInterest: number;
+    purchaseDate: string;
+    paymentDate: string;
+    maturityDate: string;
+  };
+  const [addedBonds, setAddedBonds] = useState<AddedBond[]>([]);
+  const [bondForm, setBondForm] = useState({
+    ticker: "",
+    name: "",
+    yield: "",
+    qty: "",
+    value: "",
+    purchaseInterest: "",
+    purchaseDate: new Date().toISOString().slice(0, 10),
+    paymentDate: "",
+    maturityDate: ""
+  });
+  const onSubmitBond = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const y = Number(bondForm.yield) / 100;
+    const qty = Number(bondForm.qty);
+    const value = Number(bondForm.value);
+    const purchaseInterest = Number(bondForm.purchaseInterest) || 0;
+    if (
+      !bondForm.ticker.trim() ||
+      !bondForm.name.trim() ||
+      !Number.isFinite(y) ||
+      !Number.isFinite(qty) ||
+      qty <= 0 ||
+      !Number.isFinite(value) ||
+      value <= 0
+    ) {
+      return;
+    }
+    setAddedBonds((prev) => [
+      ...prev,
+      {
+        ticker: bondForm.ticker.trim(),
+        name: bondForm.name.trim(),
+        yield: y,
+        qty,
+        value,
+        purchaseInterest,
+        purchaseDate: bondForm.purchaseDate,
+        paymentDate: bondForm.paymentDate,
+        maturityDate: bondForm.maturityDate
+      }
+    ]);
+    setBondForm({
+      ticker: "",
+      name: "",
+      yield: "",
+      qty: "",
+      value: "",
+      purchaseInterest: "",
+      purchaseDate: new Date().toISOString().slice(0, 10),
+      paymentDate: "",
+      maturityDate: ""
+    });
+    setBondFormOpen(false);
+  };
   const toggleTicker = (key: string) => {
     setExpandedTickers((prev) => {
       const next = new Set(prev);
@@ -1011,6 +1092,7 @@ export default function App() {
     ticker: string;
     securityName: string;
     currency: string;
+    securityType: string;
     trades: TradeConfirmation[];
     buyQty: number;
     sellQty: number;
@@ -1021,10 +1103,26 @@ export default function App() {
     realizedPnLPct: number;
   };
 
+  const tickerSplitMap = useMemo(() => {
+    const m = new Map<string, { total: number; afterSplit: number }>();
+    for (const s of fundTradeSummary as Array<{
+      currency: string | null;
+      ticker: string | null;
+      total: number | null;
+      totalAfterSplit: number | null;
+    }>) {
+      if (!s.ticker || s.total == null || s.totalAfterSplit == null) continue;
+      m.set(`${s.currency ?? "MNT"}|${s.ticker.trim()}`, {
+        total: s.total,
+        afterSplit: s.totalAfterSplit
+      });
+    }
+    return m;
+  }, []);
+
   const tickerSummaries = useMemo<TickerSummary[]>(() => {
     const byTicker = new Map<string, TradeConfirmation[]>();
     for (const trade of tradeConfirmations) {
-      if (trade.securityType !== "Stock") continue;
       const key = `${trade.currency || "MNT"}|${trade.ticker}`;
       const list = byTicker.get(key) ?? [];
       list.push(trade);
@@ -1043,6 +1141,7 @@ export default function App() {
         ticker,
         securityName: sorted[0]?.securityName ?? "",
         currency,
+        securityType: sorted[0]?.securityType ?? "Stock",
         trades: sorted,
         buyQty,
         sellQty,
@@ -1082,18 +1181,30 @@ export default function App() {
   );
 
   const closedPositions = useMemo(() => tickerSummaries.filter((p) => p.netQty === 0 && p.buyQty > 0), [tickerSummaries]);
-  const closedPnLStats = useMemo(() => {
-    const fxRates = fundInputs.fxRates as Record<string, number>;
-    const totalMnt = closedPositions.reduce(
-      (sum, p) => sum + p.realizedPnL * (fxRates[p.currency] ?? 1),
-      0
-    );
-    const wins = closedPositions.filter((p) => p.realizedPnL > 0).length;
-    const winRate = closedPositions.length > 0 ? wins / closedPositions.length : 0;
-    const best = [...closedPositions].sort(
-      (a, b) => b.realizedPnL * (fxRates[b.currency] ?? 1) - a.realizedPnL * (fxRates[a.currency] ?? 1)
-    )[0];
-    return { totalMnt, winRate, best };
+  const closedPnLByCurrency = useMemo(() => {
+    const byCur = new Map<string, { pnl: number; cost: number; count: number }>();
+    for (const p of closedPositions) {
+      const cur = p.currency || "MNT";
+      const e = byCur.get(cur) ?? { pnl: 0, cost: 0, count: 0 };
+      e.pnl += p.realizedPnL;
+      e.cost += p.totalCost;
+      e.count += 1;
+      byCur.set(cur, e);
+    }
+    const order = ["USD", "AUD", "EUR", "CAD", "HKD", "MNT"];
+    return [...byCur.entries()]
+      .sort(([a], [b]) => {
+        const ai = order.indexOf(a);
+        const bi = order.indexOf(b);
+        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+      })
+      .map(([currency, { pnl, cost, count }]) => ({
+        currency,
+        pnl,
+        cost,
+        pnlPct: cost > 0 ? pnl / cost : 0,
+        count
+      }));
   }, [closedPositions]);
   const [proposalForm, setProposalForm] = useState<{
     asset: string;
@@ -1149,7 +1260,6 @@ export default function App() {
     { id: "trades", label: t("internal.fmTabs.trades"), icon: tabIcon("trades") },
     { id: "bank", label: t("internal.fmTabs.bank"), icon: tabIcon("bank") },
     { id: "new_trades", label: t("internal.fmTabs.newTrades"), icon: tabIcon("new_trades") },
-    { id: "realized_pnl", label: t("internal.fmTabs.realized"), icon: tabIcon("realized_pnl") },
     { id: "users", label: t("internal.fmTabs.users"), icon: tabIcon("users") },
     { id: "settings", label: t("internal.fmTabs.settings"), icon: tabIcon("settings") }
   ];
@@ -1277,23 +1387,6 @@ export default function App() {
     }));
   };
 
-  const onExportTrades = () => {
-    const header = tradeExportColumns.map((column) => escapeCsv(column.label)).join(",");
-    const rows = tradeConfirmations.map((trade) =>
-      tradeExportColumns.map((column) => escapeCsv(column.value(trade))).join(",")
-    );
-    const csv = `\uFEFF${[header, ...rows].join("\n")}`;
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `trade-confirmation-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
   if (initialInternal) {
     const selectedRoleLabel = role === "fund_manager" ? t("role.fund") : t("role.board");
 
@@ -1302,9 +1395,15 @@ export default function App() {
       const activeUsers = fundManagersDirectory.filter((u) => u.status === "active").length;
       const invitedUsers = fundManagersDirectory.filter((u) => u.status === "invited").length;
       const latestNav = navHistoryData[navHistoryData.length - 1];
-      const prevNav = navHistoryData[navHistoryData.length - 2];
-      const dailyChangePct = prevNav ? ((latestNav.nav - prevNav.nav) / prevNav.nav) * 100 : 0;
-      const formatNav = (n: number) => `${n.toLocaleString("en-US")} MNT`;
+      const formatNav = (n: number) =>
+        `${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MNT`;
+      const fmt2 = (n: number) =>
+        n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const fmt2Str = (s: string | null | undefined) => {
+        if (s == null || s === "-" || s === "") return s ?? "—";
+        const n = Number(s);
+        return Number.isFinite(n) ? fmt2(n) : s;
+      };
       const buildStamp = () => {
         const stamp = new Date();
         const hh = stamp.getHours().toString().padStart(2, "0");
@@ -1325,7 +1424,7 @@ export default function App() {
             <div className="fm-sidebar-brand">
               <img src="/assets/ubam-logo.png" alt="UB Asset Management logo" />
               <div>
-                <p className="fm-sidebar-brand-name">UB Asset Management</p>
+                <p className="fm-sidebar-brand-name">Улаанбаатар Ассет Менежмент ҮЦК ХХК</p>
               </div>
             </div>
 
@@ -1382,47 +1481,26 @@ export default function App() {
             <main className="fm-content">
               {activeFundTab === "nav" ? (
                 <>
-                  <section className={`fm-nav-banner ${isTodayApproved ? "is-approved" : ""}`}>
-                    <div className="fm-nav-banner-info">
-                      <p className="fm-nav-banner-label">{t("internal.nav.todayLabel")}</p>
-                      <p className="fm-nav-banner-date">{latestNav.date}</p>
-                      <p className="fm-nav-banner-value">
-                        {fundCalc.navPerUnit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MNT
-                      </p>
-                      <p className="fm-nav-banner-perunit">
-                        {formatNav(latestNav.nav)}
-                        <span> · {t("internal.nav.brNet")}</span>
-                      </p>
-                      <p className={`fm-nav-banner-change ${dailyChangePct >= 0 ? "up" : "down"}`}>
-                        {dailyChangePct >= 0 ? "▲" : "▼"} {dailyChangePct >= 0 ? "+" : ""}
-                        {dailyChangePct.toFixed(2)}%
-                      </p>
-                    </div>
-                    <div className="fm-nav-banner-actions">
-                      <span className={`fm-nav-banner-pill ${isTodayApproved ? "published" : "draft"}`}>
-                        <span className="status-dot" />
-                        {isTodayApproved ? t("internal.nav.statusPublished") : t("internal.nav.statusDraft")}
-                      </span>
-                      {isTodayApproved ? (
-                        <dl className="fm-nav-banner-meta">
-                          <div>
-                            <dt>{t("internal.nav.approvedBy")}</dt>
-                            <dd>{navApproval?.by}</dd>
-                          </div>
-                          <div>
-                            <dt>{t("internal.nav.approvedAt")}</dt>
-                            <dd>{navApproval?.at}</dd>
-                          </div>
-                        </dl>
-                      ) : null}
-                    </div>
-                  </section>
-
-                  <div className="fm-nav-action-row">
+                  <div className="fm-nav-row">
+                    <section className={`fm-nav-banner ${isTodayApproved ? "is-approved" : ""}`}>
+                      <div className="fm-nav-banner-info">
+                        <p className="fm-nav-banner-label">{t("internal.nav.todayLabel")}</p>
+                        <p className="fm-nav-banner-date">{latestNav.date}</p>
+                        <p className="fm-nav-banner-value">
+                          {fundCalc.navPerUnit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MNT
+                        </p>
+                      </div>
+                      <div className="fm-nav-banner-actions">
+                        <span className={`fm-nav-banner-pill ${isTodayApproved ? "published" : "draft"}`}>
+                          <span className="status-dot" />
+                          {isTodayApproved ? t("internal.nav.statusPublished") : t("internal.nav.statusDraft")}
+                        </span>
+                      </div>
+                    </section>
                     {!isTodayApproved ? (
                       <button
                         type="button"
-                        className="fm-nav-action-btn approve"
+                        className="fm-nav-outside-btn approve"
                         onClick={approveTodayNav}
                       >
                         {t("internal.nav.approveBtn")}
@@ -1430,7 +1508,7 @@ export default function App() {
                     ) : (
                       <button
                         type="button"
-                        className="fm-nav-action-btn ghost"
+                        className="fm-nav-outside-btn ghost"
                         onClick={() => setNavApproval(null)}
                       >
                         {t("internal.nav.unpublishBtn")}
@@ -1442,10 +1520,22 @@ export default function App() {
                     <header className="fm-card-head">
                       <h2>{t("internal.nav.breakdownTitle")}</h2>
                     </header>
+                    {(() => {
+                      const stocksTotalMnt = fundInputs.equities
+                        .filter((e) => e.type !== "Option")
+                        .reduce((s, e) => s + (e.mcapMnt ?? 0), 0);
+                      const optionsTotalMnt = fundInputs.equities
+                        .filter((e) => e.type === "Option")
+                        .reduce((s, e) => s + (e.mcapMnt ?? 0), 0);
+                      return (
                     <ul className="fm-breakdown">
                       <li>
                         <span>{t("internal.nav.brEquities")}</span>
-                        <strong>{formatNav(fundCalc.totalEquities)}</strong>
+                        <strong>{formatNav(stocksTotalMnt)}</strong>
+                      </li>
+                      <li>
+                        <span>{t("internal.nav.brOptions")}</span>
+                        <strong>{formatNav(optionsTotalMnt)}</strong>
                       </li>
                       <li>
                         <span>{t("internal.nav.brBonds")}</span>
@@ -1465,7 +1555,7 @@ export default function App() {
                       </li>
                       <li className="subtle">
                         <span>{t("internal.nav.brUnits")}</span>
-                        <strong>{fundCalc.totalUnits.toLocaleString("en-US")}</strong>
+                        <strong>{fundCalc.totalUnits.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                       </li>
                       <li className="total">
                         <span>{t("internal.nav.brPerUnit")}</span>
@@ -1474,6 +1564,8 @@ export default function App() {
                         </strong>
                       </li>
                     </ul>
+                      );
+                    })()}
                   </section>
 
                   <section className="fm-card">
@@ -1493,16 +1585,16 @@ export default function App() {
                   <section className="fm-card">
                     <header className="fm-card-head">
                       <h2>{t("internal.portfolio.fxTitle")}</h2>
-                      <p className="fm-card-sub">{t("internal.portfolio.fxSub")}</p>
                     </header>
                     <div className="fm-fx-grid">
-                      {Object.entries(fundInputs.fxRates).map(([cur, rate]) => (
+                      {Object.entries(fundInputs.fxRates)
+                        .filter(([cur]) => cur !== "MNT")
+                        .map(([cur, rate]) => (
                         <article key={cur} className="fm-fx-card">
                           <p className="fm-fx-currency">{cur}</p>
                           <strong className="fm-fx-rate">
                             {rate.toLocaleString("en-US", { maximumFractionDigits: 4 })}
                           </strong>
-                          <span className="fm-fx-unit">MNT / 1 {cur}</span>
                         </article>
                       ))}
                     </div>
@@ -1554,168 +1646,354 @@ export default function App() {
                     </div>
                   </section>
 
-                  <section className="fm-card">
-                    <header className="fm-card-head">
-                      <h2>{t("internal.portfolio.bondsTitle")}</h2>
-                      <p className="fm-card-sub">{t("internal.portfolio.bondsSub")}</p>
-                    </header>
-                    <div className="fm-table-wrap">
-                      <table className="fm-table">
-                        <thead>
-                          <tr>
-                            <th>{t("internal.portfolio.colTicker")}</th>
-                            <th style={{ textAlign: "right" }}>{t("internal.portfolio.colQty")}</th>
-                            <th style={{ textAlign: "right" }}>{t("internal.portfolio.colCost")}</th>
-                            <th style={{ textAlign: "right" }}>{t("internal.portfolio.colYield")}</th>
-                            <th>{t("internal.portfolio.colStart")}</th>
-                            <th>{t("internal.portfolio.colCalc")}</th>
-                            <th style={{ textAlign: "right" }}>{t("internal.portfolio.colAccrued")}</th>
-                            <th style={{ textAlign: "right" }}>{t("internal.portfolio.colTotalValue")}</th>
-                            <th style={{ textAlign: "right" }}>{t("internal.portfolio.colAllocation")}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {fundInputs.bonds.map((b) => {
-                            const allocation = fundCalc.netAssets > 0 ? (b.totalValue ?? 0) / fundCalc.netAssets : 0;
-                            return (
-                              <tr key={b.ticker}>
-                                <td>{b.ticker}</td>
-                                <td style={{ textAlign: "right" }}>
-                                  {(b.qty ?? 0).toLocaleString("en-US")}
-                                </td>
-                                <td style={{ textAlign: "right" }}>
-                                  {(b.costBasis ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                                </td>
-                                <td style={{ textAlign: "right" }}>
-                                  {((b.yield ?? 0) * 100).toFixed(2)}%
-                                </td>
-                                <td>{b.initialDate ?? "—"}</td>
-                                <td>{b.calcDate ?? "—"}</td>
-                                <td style={{ textAlign: "right" }}>
-                                  {(b.interestAmount ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                                </td>
-                                <td style={{ textAlign: "right" }}>
-                                  <strong>
-                                    {(b.totalValue ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                                  </strong>
-                                </td>
-                                <td style={{ textAlign: "right" }}>{(allocation * 100).toFixed(2)}%</td>
+                  {(() => {
+                    const todayDate = new Date().toISOString().slice(0, 10);
+                    const userBondRows = addedBonds.map((b) => {
+                      const initial = new Date(b.purchaseDate).getTime();
+                      const days = (new Date(todayDate).getTime() - initial) / 86_400_000;
+                      const accrued = b.value * b.yield * (Math.max(0, days) / 365);
+                      const total = b.value + accrued + b.purchaseInterest;
+                      return {
+                        ticker: b.ticker,
+                        name: b.name,
+                        qty: b.qty,
+                        costBasis: b.value,
+                        yield: b.yield,
+                        initialDate: b.purchaseDate,
+                        calcDate: todayDate,
+                        interestAmount: accrued,
+                        totalValue: total,
+                        custom: true
+                      };
+                    });
+                    const userBondsTotal = userBondRows.reduce((s, b) => s + b.totalValue, 0);
+                    const liveTotalBonds = fundCalc.totalBonds + userBondsTotal;
+                    const liveNetAssets = fundCalc.netAssets + userBondsTotal;
+                    return (
+                      <section className="fm-card">
+                        <header className="fm-card-head">
+                          <h2>{t("internal.portfolio.bondsTitle")}</h2>
+                        </header>
+                        <div className="fm-table-wrap">
+                          <table className="fm-table">
+                            <thead>
+                              <tr>
+                                <th>{t("internal.portfolio.colTicker")}</th>
+                                <th style={{ textAlign: "right" }}>{t("internal.portfolio.colQty")}</th>
+                                <th style={{ textAlign: "right" }}>{t("internal.portfolio.colCost")}</th>
+                                <th style={{ textAlign: "right" }}>{t("internal.portfolio.colYield")}</th>
+                                <th>{t("internal.portfolio.colStart")}</th>
+                                <th>{t("internal.portfolio.colCalc")}</th>
+                                <th style={{ textAlign: "right" }}>{t("internal.portfolio.colAccrued")}</th>
+                                <th style={{ textAlign: "right" }}>{t("internal.portfolio.colTotalValue")}</th>
+                                <th style={{ textAlign: "right" }}>{t("internal.portfolio.colAllocation")}</th>
                               </tr>
-                            );
-                          })}
-                          <tr className="fm-row-total">
-                            <td colSpan={7}>{t("internal.nav.brBonds")}</td>
-                            <td style={{ textAlign: "right" }}>
-                              {fundCalc.totalBonds.toLocaleString("en-US", { maximumFractionDigits: 0 })} MNT
-                            </td>
-                            <td style={{ textAlign: "right" }}>
-                              {((fundCalc.totalBonds / fundCalc.netAssets) * 100).toFixed(2)}%
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </section>
+                            </thead>
+                            <tbody>
+                              {fundInputs.bonds.map((b) => {
+                                const allocation = liveNetAssets > 0 ? (b.totalValue ?? 0) / liveNetAssets : 0;
+                                return (
+                                  <tr key={b.ticker}>
+                                    <td>{b.ticker}</td>
+                                    <td style={{ textAlign: "right" }}>
+                                      {(b.qty ?? 0).toLocaleString("en-US")}
+                                    </td>
+                                    <td style={{ textAlign: "right" }}>
+                                      {(b.costBasis ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                                    </td>
+                                    <td style={{ textAlign: "right" }}>
+                                      {((b.yield ?? 0) * 100).toFixed(2)}%
+                                    </td>
+                                    <td>{b.initialDate ?? "—"}</td>
+                                    <td>{b.calcDate ?? "—"}</td>
+                                    <td style={{ textAlign: "right" }}>
+                                      {(b.interestAmount ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                                    </td>
+                                    <td style={{ textAlign: "right" }}>
+                                      <strong>
+                                        {(b.totalValue ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                                      </strong>
+                                    </td>
+                                    <td style={{ textAlign: "right" }}>{(allocation * 100).toFixed(2)}%</td>
+                                  </tr>
+                                );
+                              })}
+                              {userBondRows.map((b, i) => {
+                                const allocation = liveNetAssets > 0 ? b.totalValue / liveNetAssets : 0;
+                                return (
+                                  <tr key={`added-${i}-${b.ticker}`} className="fm-row-added">
+                                    <td>
+                                      <strong>{b.ticker}</strong>
+                                      <br />
+                                      <span className="fm-row-added-name">{b.name}</span>
+                                    </td>
+                                    <td style={{ textAlign: "right" }}>{b.qty.toLocaleString("en-US")}</td>
+                                    <td style={{ textAlign: "right" }}>
+                                      {b.costBasis.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                                    </td>
+                                    <td style={{ textAlign: "right" }}>{(b.yield * 100).toFixed(2)}%</td>
+                                    <td>{b.initialDate}</td>
+                                    <td>{b.calcDate}</td>
+                                    <td style={{ textAlign: "right" }}>
+                                      {b.interestAmount.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                                    </td>
+                                    <td style={{ textAlign: "right" }}>
+                                      <strong>{b.totalValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}</strong>
+                                    </td>
+                                    <td style={{ textAlign: "right" }}>{(allocation * 100).toFixed(2)}%</td>
+                                  </tr>
+                                );
+                              })}
+                              <tr className="fm-row-total">
+                                <td colSpan={7}>{t("internal.nav.brBonds")}</td>
+                                <td style={{ textAlign: "right" }}>
+                                  {liveTotalBonds.toLocaleString("en-US", { maximumFractionDigits: 0 })} MNT
+                                </td>
+                                <td style={{ textAlign: "right" }}>
+                                  {((liveTotalBonds / liveNetAssets) * 100).toFixed(2)}%
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </section>
+                    );
+                  })()}
 
-                  <section className="fm-card">
-                    <header className="fm-card-head">
-                      <h2>{t("internal.portfolio.equitiesTitle")}</h2>
-                      <p className="fm-card-sub">{t("internal.portfolio.equitiesSub")}</p>
-                    </header>
-                    <div className="fm-table-wrap">
-                      <table className="fm-table">
-                        <thead>
-                          <tr>
-                            <th>{t("internal.portfolio.colTicker")}</th>
-                            <th>{t("internal.portfolio.colType")}</th>
-                            <th>{t("internal.portfolio.colCurrency")}</th>
-                            <th style={{ textAlign: "right" }}>{t("internal.portfolio.colQty")}</th>
-                            <th style={{ textAlign: "right" }}>{t("internal.portfolio.colAvgPrice")}</th>
-                            <th style={{ textAlign: "right" }}>{t("internal.portfolio.colPrice")}</th>
-                            <th style={{ textAlign: "right" }}>{t("internal.portfolio.colMcap")}</th>
-                            <th style={{ textAlign: "right" }}>{t("internal.portfolio.colMcapMnt")}</th>
-                            <th style={{ textAlign: "right" }}>{t("internal.portfolio.colPnL")}</th>
-                            <th style={{ textAlign: "right" }}>{t("internal.portfolio.colAllocation")}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {[...fundInputs.equities]
-                            .sort((a, b) => (b.mcapMnt ?? 0) - (a.mcapMnt ?? 0))
-                            .map((e) => {
-                              const pnl = e.unrealizedPnL ?? 0;
-                              const pnlPct = e.unrealizedPnLPct ?? 0;
-                              const positive = pnl >= 0;
-                              const allocation = fundCalc.netAssets > 0 ? (e.mcapMnt ?? 0) / fundCalc.netAssets : 0;
+                  {(() => {
+                    const stocks = fundInputs.equities.filter((e) => e.type !== "Option");
+                    const options = fundInputs.equities.filter((e) => e.type === "Option");
+                    const currencyOrder = ["USD", "AUD", "EUR", "CAD", "HKD", "MNT"];
+                    const stocksByCurrency = new Map<string, typeof stocks>();
+                    for (const s of stocks) {
+                      const cur = s.currency || "MNT";
+                      const list = stocksByCurrency.get(cur) ?? [];
+                      list.push(s);
+                      stocksByCurrency.set(cur, list);
+                    }
+                    const orderedStockCurrencies = [
+                      ...currencyOrder.filter((c) => stocksByCurrency.has(c)),
+                      ...[...stocksByCurrency.keys()].filter((c) => !currencyOrder.includes(c))
+                    ];
+
+                    const renderEquityRow = (e: typeof stocks[number]) => {
+                      const pnl = e.unrealizedPnL ?? 0;
+                      const pnlPct = e.unrealizedPnLPct ?? 0;
+                      const positive = pnl >= 0;
+                      return (
+                        <tr key={e.ticker}>
+                          <td>
+                            <strong>{e.ticker}</strong>
+                          </td>
+                          <td style={{ textAlign: "right" }}>
+                            {(e.qty ?? 0).toLocaleString("en-US", { maximumFractionDigits: 4 })}
+                          </td>
+                          <td style={{ textAlign: "right" }}>
+                            {(e.avgPrice ?? 0).toLocaleString("en-US", { maximumFractionDigits: 4 })}
+                          </td>
+                          <td style={{ textAlign: "right" }}>
+                            {(e.price ?? 0).toLocaleString("en-US", { maximumFractionDigits: 4 })}
+                          </td>
+                          <td style={{ textAlign: "right" }}>
+                            {(e.mcap ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                          </td>
+                          <td style={{ textAlign: "right" }}>
+                            <strong>
+                              {(e.mcapMnt ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                            </strong>
+                          </td>
+                          <td
+                            style={{ textAlign: "right" }}
+                            className={positive ? "cell-up" : "cell-down"}
+                          >
+                            {positive ? "+" : ""}
+                            {pnl.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                            <br />
+                            <span style={{ fontSize: "0.74rem", opacity: 0.85 }}>
+                              ({positive ? "+" : ""}
+                              {(pnlPct * 100).toFixed(2)}%)
+                            </span>
+                          </td>
+                          <td style={{ textAlign: "right" }}>
+                            <button type="button" className="fm-row-edit-btn" aria-label={t("internal.portfolio.edit")}>
+                              {t("internal.portfolio.edit")}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    };
+
+                    return (
+                      <>
+                        <section className="fm-card">
+                          <header className="fm-card-head">
+                            <h2>{t("internal.portfolio.stocksTitle")}</h2>
+                          </header>
+                          <div className="fm-trade-groups">
+                            {orderedStockCurrencies.map((currency) => {
+                              const list = stocksByCurrency.get(currency) ?? [];
+                              const sorted = [...list].sort((a, b) => (b.mcapMnt ?? 0) - (a.mcapMnt ?? 0));
+                              const groupTotalMnt = sorted.reduce((s, e) => s + (e.mcapMnt ?? 0), 0);
                               return (
-                                <tr key={e.ticker}>
-                                  <td>
-                                    <strong>{e.ticker}</strong>
-                                  </td>
-                                  <td>{e.type}</td>
-                                  <td>{e.currency}</td>
-                                  <td style={{ textAlign: "right" }}>
-                                    {(e.qty ?? 0).toLocaleString("en-US")}
-                                  </td>
-                                  <td style={{ textAlign: "right" }}>
-                                    {(e.avgPrice ?? 0).toLocaleString("en-US", { maximumFractionDigits: 4 })}
-                                  </td>
-                                  <td style={{ textAlign: "right" }}>
-                                    {(e.price ?? 0).toLocaleString("en-US", { maximumFractionDigits: 4 })}
-                                  </td>
-                                  <td style={{ textAlign: "right" }}>
-                                    {(e.mcap ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}
-                                  </td>
-                                  <td style={{ textAlign: "right" }}>
-                                    <strong>
-                                      {(e.mcapMnt ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                                    </strong>
-                                  </td>
-                                  <td
-                                    style={{ textAlign: "right" }}
-                                    className={positive ? "cell-up" : "cell-down"}
-                                  >
-                                    {positive ? "+" : ""}
-                                    {pnl.toLocaleString("en-US", { maximumFractionDigits: 2 })}
-                                    <br />
-                                    <span style={{ fontSize: "0.74rem", opacity: 0.85 }}>
-                                      ({positive ? "+" : ""}
-                                      {(pnlPct * 100).toFixed(2)}%)
-                                    </span>
-                                  </td>
-                                  <td style={{ textAlign: "right" }}>{(allocation * 100).toFixed(2)}%</td>
-                                </tr>
+                                <section className="fm-currency-group" key={currency}>
+                                  <header className="fm-currency-header">
+                                    <h3>{currency}</h3>
+                                    <span>{sorted.length} {sorted.length === 1 ? "stock" : "stocks"}</span>
+                                  </header>
+                                  <div className="fm-table-wrap">
+                                    <table className="fm-table">
+                                      <thead>
+                                        <tr>
+                                          <th>{t("internal.portfolio.colTicker")}</th>
+                                          <th style={{ textAlign: "right" }}>{t("internal.portfolio.colQty")}</th>
+                                          <th style={{ textAlign: "right" }}>{t("internal.portfolio.colAvgPrice")}</th>
+                                          <th style={{ textAlign: "right" }}>{t("internal.portfolio.colPrice")}</th>
+                                          <th style={{ textAlign: "right" }}>{t("internal.portfolio.colMcap")}</th>
+                                          <th style={{ textAlign: "right" }}>{t("internal.portfolio.colMcapMnt")}</th>
+                                          <th style={{ textAlign: "right" }}>{t("internal.portfolio.colPnL")}</th>
+                                          <th style={{ textAlign: "right" }}>{t("internal.portfolio.edit")}</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {sorted.map(renderEquityRow)}
+                                        <tr className="fm-row-total">
+                                          <td colSpan={5}>{currency} subtotal</td>
+                                          <td style={{ textAlign: "right" }}>
+                                            {groupTotalMnt.toLocaleString("en-US", { maximumFractionDigits: 0 })} MNT
+                                          </td>
+                                          <td />
+                                          <td />
+                                        </tr>
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </section>
                               );
                             })}
-                          <tr className="fm-row-total">
-                            <td colSpan={7}>{t("internal.nav.brEquities")}</td>
-                            <td style={{ textAlign: "right" }}>
-                              {fundCalc.totalEquities.toLocaleString("en-US", { maximumFractionDigits: 0 })} MNT
-                            </td>
-                            <td />
-                            <td style={{ textAlign: "right" }}>
-                              {((fundCalc.totalEquities / fundCalc.netAssets) * 100).toFixed(2)}%
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </section>
+                          </div>
+                        </section>
+
+                        {options.length ? (
+                          <section className="fm-card">
+                            <header className="fm-card-head">
+                              <h2>{t("internal.portfolio.optionsTitle")}</h2>
+                            </header>
+                            <div className="fm-table-wrap">
+                              <table className="fm-table">
+                                <thead>
+                                  <tr>
+                                    <th>{t("internal.portfolio.colTicker")}</th>
+                                    <th>{t("internal.portfolio.colCurrency")}</th>
+                                    <th style={{ textAlign: "right" }}>{t("internal.portfolio.colQty")}</th>
+                                    <th style={{ textAlign: "right" }}>{t("internal.portfolio.colAvgPrice")}</th>
+                                    <th style={{ textAlign: "right" }}>{t("internal.portfolio.colPrice")}</th>
+                                    <th style={{ textAlign: "right" }}>{t("internal.portfolio.colMcap")}</th>
+                                    <th style={{ textAlign: "right" }}>{t("internal.portfolio.colMcapMnt")}</th>
+                                    <th style={{ textAlign: "right" }}>{t("internal.portfolio.colPnL")}</th>
+                                    <th style={{ textAlign: "right" }}>{t("internal.portfolio.edit")}</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {[...options]
+                                    .sort((a, b) => (b.mcapMnt ?? 0) - (a.mcapMnt ?? 0))
+                                    .map((e) => {
+                                      const pnl = e.unrealizedPnL ?? 0;
+                                      const pnlPct = e.unrealizedPnLPct ?? 0;
+                                      const positive = pnl >= 0;
+                                      return (
+                                        <tr key={e.ticker}>
+                                          <td>
+                                            <strong>{e.ticker}</strong>
+                                          </td>
+                                          <td>{e.currency}</td>
+                                          <td style={{ textAlign: "right" }}>
+                                            {(e.qty ?? 0).toLocaleString("en-US")}
+                                          </td>
+                                          <td style={{ textAlign: "right" }}>
+                                            {(e.avgPrice ?? 0).toLocaleString("en-US", { maximumFractionDigits: 4 })}
+                                          </td>
+                                          <td style={{ textAlign: "right" }}>
+                                            {(e.price ?? 0).toLocaleString("en-US", { maximumFractionDigits: 4 })}
+                                          </td>
+                                          <td style={{ textAlign: "right" }}>
+                                            {(e.mcap ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                                          </td>
+                                          <td style={{ textAlign: "right" }}>
+                                            <strong>
+                                              {(e.mcapMnt ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                                            </strong>
+                                          </td>
+                                          <td
+                                            style={{ textAlign: "right" }}
+                                            className={positive ? "cell-up" : "cell-down"}
+                                          >
+                                            {positive ? "+" : ""}
+                                            {pnl.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                                            <br />
+                                            <span style={{ fontSize: "0.74rem", opacity: 0.85 }}>
+                                              ({positive ? "+" : ""}
+                                              {(pnlPct * 100).toFixed(2)}%)
+                                            </span>
+                                          </td>
+                                          <td style={{ textAlign: "right" }}>
+                                            <button
+                                              type="button"
+                                              className="fm-row-edit-btn"
+                                              aria-label={t("internal.portfolio.edit")}
+                                            >
+                                              {t("internal.portfolio.edit")}
+                                            </button>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  {(() => {
+                                    const optionsTotalMnt = options.reduce(
+                                      (s, e) => s + (e.mcapMnt ?? 0),
+                                      0
+                                    );
+                                    return (
+                                      <tr className="fm-row-total">
+                                        <td colSpan={6}>{t("internal.portfolio.optionsTitle")} subtotal</td>
+                                        <td style={{ textAlign: "right" }}>
+                                          {optionsTotalMnt.toLocaleString("en-US", { maximumFractionDigits: 0 })} MNT
+                                        </td>
+                                        <td />
+                                        <td />
+                                      </tr>
+                                    );
+                                  })()}
+                                </tbody>
+                              </table>
+                            </div>
+                          </section>
+                        ) : null}
+                      </>
+                    );
+                  })()}
                 </>
               ) : null}
 
               {activeFundTab === "trades" ? (
                 <div className="fm-trades-layout">
-                  <form className="fm-form fm-card" onSubmit={onSubmitTradeConfirmation}>
+                  <div className="fm-trade-actions">
                     <button
-                              type="button"
-                              className={`fm-collapse-toggle ${tradeEntryOpen ? "open" : ""}`}
-                              onClick={() => setTradeEntryOpen((current) => !current)}
-                              aria-expanded={tradeEntryOpen}
-                            >
-                              <span>{t("internal.trades.entryTitle")}</span>
-                              <span className="fm-collapse-icon">{tradeEntryOpen ? "−" : "+"}</span>
-                            </button>
-
+                      type="button"
+                      className="btn btn-accent"
+                      onClick={() => setTradeEntryOpen((current) => !current)}
+                    >
+                      {tradeEntryOpen ? "−" : "+"} {t("internal.trades.stockAdd")}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-accent"
+                      onClick={() => setBondFormOpen(true)}
+                    >
+                      + {t("internal.portfolio.bondAdd")}
+                    </button>
+                  </div>
+                  {tradeEntryOpen ? (
+                  <form className="fm-form fm-card" onSubmit={onSubmitTradeConfirmation}>
                             {tradeEntryOpen ? (
                               <>
                                 <div className="fm-field-grid">
@@ -1917,15 +2195,55 @@ export default function App() {
                               </>
                             ) : null}
                           </form>
+                          ) : null}
+
+                          <div className="fm-segment">
+                            <button
+                              type="button"
+                              className={`fm-segment-btn ${tradesSegment === "active" ? "active" : ""}`}
+                              onClick={() => setTradesSegment("active")}
+                            >
+                              {t("internal.trades.segActive")}
+                              <span className="fm-segment-count">
+                                {openPositionGroups.reduce((s, g) => s + g.tickers.length, 0)}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              className={`fm-segment-btn ${tradesSegment === "inactive" ? "active" : ""}`}
+                              onClick={() => setTradesSegment("inactive")}
+                            >
+                              {t("internal.trades.segInactive")}
+                              <span className="fm-segment-count">{closedPositions.length}</span>
+                            </button>
+                          </div>
+
+                          {tradesSegment === "inactive" ? (
+                            <div className="fm-stats fm-stats-pnl">
+                              {closedPnLByCurrency.map(({ currency, pnl, count }) => {
+                                const positive = pnl >= 0;
+                                return (
+                                  <article className="fm-stat-card" key={currency}>
+                                    <p>
+                                      {currency}{" "}
+                                      <span className="fm-stat-sub">
+                                        · {count} {count === 1 ? "stock" : "stocks"}
+                                      </span>
+                                    </p>
+                                    <strong className={positive ? "cell-up" : "cell-down"}>
+                                      {positive ? "+" : ""}
+                                      {pnl.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
+                                      <span className="fm-stat-cur">{currency}</span>
+                                    </strong>
+                                  </article>
+                                );
+                              })}
+                            </div>
+                          ) : null}
 
                           <section className="fm-card">
-                            <header className="fm-card-head">
-                              <h2>{t("internal.trades.tableTitle")}</h2>
-                              <button className="btn btn-ghost fm-export-btn" type="button" onClick={onExportTrades}>
-                                {t("internal.trades.export")}
-                              </button>
-                            </header>
-                            {openPositionGroups.length ? (
+                            {tradesSegment === "active" ? (
+                              openPositionGroups.length ? (
                               <div className="fm-trade-groups">
                                 {openPositionGroups.map(({ currency, tickers }) => (
                                   <section className="fm-currency-group" key={currency}>
@@ -1937,6 +2255,11 @@ export default function App() {
                                       {tickers.map(({ ticker, trades, netQty, securityName }) => {
                                         const key = `${currency}:${ticker}`;
                                         const open = expandedTickers.has(key);
+                                        const splitInfo = tickerSplitMap.get(`${currency}|${ticker}`);
+                                        const hasSplit =
+                                          splitInfo != null &&
+                                          Math.abs(splitInfo.total - splitInfo.afterSplit) > 0.001;
+                                        const displayShares = hasSplit ? splitInfo!.afterSplit : netQty;
                                         return (
                                           <div key={ticker} className={`fm-ticker-card ${open ? "open" : ""}`}>
                                             <button
@@ -1951,7 +2274,16 @@ export default function App() {
                                               <span className="fm-ticker-symbol">{ticker}</span>
                                               <span className="fm-ticker-name">{securityName}</span>
                                               <span className="fm-ticker-net">
-                                                {netQty.toLocaleString("en-US")} shares
+                                                {displayShares.toLocaleString("en-US", {
+                                                  maximumFractionDigits: 4
+                                                })}{" "}
+                                                shares
+                                                {hasSplit ? (
+                                                  <span className="fm-ticker-split">
+                                                    {" "}
+                                                    (was {splitInfo!.total.toLocaleString("en-US")} pre-split)
+                                                  </span>
+                                                ) : null}
                                               </span>
                                               <span className="fm-ticker-count">
                                                 {trades.length} {trades.length === 1 ? "trade" : "trades"}
@@ -1983,29 +2315,13 @@ export default function App() {
                                                               {tr.type}
                                                             </span>
                                                           </td>
-                                                          <td>{tr.quantity.toLocaleString("en-US")}</td>
-                                                          <td>
-                                                            {tr.unitPrice.toLocaleString("en-US", {
-                                                              maximumFractionDigits: 4
-                                                            })}
-                                                          </td>
-                                                          <td>
-                                                            {tr.secTotal.toLocaleString("en-US", {
-                                                              maximumFractionDigits: 2
-                                                            })}
-                                                          </td>
-                                                          <td>
-                                                            {tr.totalFee.toLocaleString("en-US", {
-                                                              maximumFractionDigits: 4
-                                                            })}
-                                                          </td>
-                                                          <td>
-                                                            {tr.total.toLocaleString("en-US", {
-                                                              maximumFractionDigits: 2
-                                                            })}
-                                                          </td>
-                                                          <td>{tr.exchangeRate}</td>
-                                                          <td>{tr.totalUsd}</td>
+                                                          <td>{fmt2(tr.quantity)}</td>
+                                                          <td>{fmt2(tr.unitPrice)}</td>
+                                                          <td>{fmt2(tr.secTotal)}</td>
+                                                          <td>{fmt2(tr.totalFee)}</td>
+                                                          <td>{fmt2(tr.total)}</td>
+                                                          <td>{fmt2Str(tr.exchangeRate)}</td>
+                                                          <td>{fmt2Str(tr.totalUsd)}</td>
                                                         </tr>
                                                       ))}
                                                     </tbody>
@@ -2022,6 +2338,119 @@ export default function App() {
                               </div>
                             ) : (
                               <p className="fm-empty">{t("internal.trades.empty")}</p>
+                            )
+                            ) : closedPositionGroups.length ? (
+                              <div className="fm-trade-groups">
+                                {closedPositionGroups.map(({ currency, tickers }) => (
+                                  <section className="fm-currency-group" key={currency}>
+                                    <header className="fm-currency-header">
+                                      <h3>{currency}</h3>
+                                      <span>
+                                        {tickers.length} {tickers.length === 1 ? "stock" : "stocks"}
+                                      </span>
+                                    </header>
+                                    <div className="fm-ticker-list">
+                                      {tickers.map((pos) => {
+                                        const key = `closed:${currency}:${pos.ticker}`;
+                                        const open = expandedTickers.has(key);
+                                        const positive = pos.realizedPnL >= 0;
+                                        return (
+                                          <div key={pos.ticker} className={`fm-ticker-card ${open ? "open" : ""}`}>
+                                            <button
+                                              type="button"
+                                              className="fm-ticker-toggle fm-ticker-toggle-pnl"
+                                              onClick={() => toggleTicker(key)}
+                                              aria-expanded={open}
+                                            >
+                                              <span className="fm-ticker-arrow" aria-hidden="true">▸</span>
+                                              <span className="fm-ticker-symbol">{pos.ticker}</span>
+                                              <span className="fm-ticker-name">{pos.securityName}</span>
+                                              <span className="fm-ticker-count">
+                                                {pos.buyQty.toLocaleString("en-US")} shares
+                                              </span>
+                                              <span className={positive ? "fm-ticker-pnl up" : "fm-ticker-pnl down"}>
+                                                {positive ? "+" : ""}
+                                                {pos.realizedPnL.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
+                                                {pos.currency}
+                                              </span>
+                                              <span className={positive ? "fm-ticker-pnl-pct up" : "fm-ticker-pnl-pct down"}>
+                                                {positive ? "+" : ""}
+                                                {(pos.realizedPnLPct * 100).toFixed(2)}%
+                                              </span>
+                                            </button>
+                                            {open ? (
+                                              <div className="fm-ticker-detail">
+                                                <div className="fm-position-summary">
+                                                  <div>
+                                                    <p>Total cost</p>
+                                                    <strong>
+                                                      {pos.totalCost.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
+                                                      {pos.currency}
+                                                    </strong>
+                                                  </div>
+                                                  <div>
+                                                    <p>Total proceeds</p>
+                                                    <strong>
+                                                      {pos.totalProceeds.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
+                                                      {pos.currency}
+                                                    </strong>
+                                                  </div>
+                                                  <div>
+                                                    <p>Realized P&amp;L</p>
+                                                    <strong className={positive ? "cell-up" : "cell-down"}>
+                                                      {positive ? "+" : ""}
+                                                      {pos.realizedPnL.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
+                                                      {pos.currency}
+                                                    </strong>
+                                                  </div>
+                                                </div>
+                                                <div className="fm-table-wrap">
+                                                  <table className="fm-table fm-trade-detail-table">
+                                                    <thead>
+                                                      <tr>
+                                                        <th>Date</th>
+                                                        <th>Type</th>
+                                                        <th>Shares</th>
+                                                        <th>@ Price</th>
+                                                        <th>SEC value</th>
+                                                        <th>Total fees</th>
+                                                        <th>Total</th>
+                                                        <th>FX</th>
+                                                        <th>Total USD</th>
+                                                      </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                      {pos.trades.map((tr) => (
+                                                        <tr key={tr.id}>
+                                                          <td>{tr.tradeDate}</td>
+                                                          <td>
+                                                            <span className={`trade-type ${tr.type.toLowerCase()}`}>
+                                                              {tr.type}
+                                                            </span>
+                                                          </td>
+                                                          <td>{fmt2(tr.quantity)}</td>
+                                                          <td>{fmt2(tr.unitPrice)}</td>
+                                                          <td>{fmt2(tr.secTotal)}</td>
+                                                          <td>{fmt2(tr.totalFee)}</td>
+                                                          <td>{fmt2(tr.total)}</td>
+                                                          <td>{fmt2Str(tr.exchangeRate)}</td>
+                                                          <td>{fmt2Str(tr.totalUsd)}</td>
+                                                        </tr>
+                                                      ))}
+                                                    </tbody>
+                                                  </table>
+                                                </div>
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </section>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="fm-empty">No closed positions yet.</p>
                             )}
                           </section>
                         </div>
@@ -2139,162 +2568,6 @@ export default function App() {
                       </>
                     );
                   })()}
-                </>
-              ) : null}
-
-              {activeFundTab === "realized_pnl" ? (
-                <>
-                  <div className="fm-stats fm-stats-two">
-                    <article className={`fm-stat-card primary ${closedPnLStats.totalMnt < 0 ? "negative" : ""}`}>
-                      <p>{t("internal.realized.total")}</p>
-                      <strong>
-                        {closedPnLStats.totalMnt >= 0 ? "+" : ""}
-                        {closedPnLStats.totalMnt.toLocaleString("en-US", { maximumFractionDigits: 0 })} MNT
-                      </strong>
-                    </article>
-                    <article className="fm-stat-card">
-                      <p>{t("internal.realized.winRate")}</p>
-                      <strong>{(closedPnLStats.winRate * 100).toFixed(1)}%</strong>
-                    </article>
-                  </div>
-
-                  <section className="fm-card">
-                    <header className="fm-card-head">
-                      <h2>{t("internal.realized.title")}</h2>
-                      <p className="fm-card-sub">
-                        {closedPositions.length} {closedPositions.length === 1 ? "closed position" : "closed positions"}
-                      </p>
-                    </header>
-                    {closedPositionGroups.length ? (
-                      <div className="fm-trade-groups">
-                        {closedPositionGroups.map(({ currency, tickers }) => (
-                          <section className="fm-currency-group" key={currency}>
-                            <header className="fm-currency-header">
-                              <h3>{currency}</h3>
-                              <span>
-                                {tickers.length} {tickers.length === 1 ? "stock" : "stocks"}
-                              </span>
-                            </header>
-                            <div className="fm-ticker-list">
-                              {tickers.map((pos) => {
-                                const key = `closed:${currency}:${pos.ticker}`;
-                                const open = expandedTickers.has(key);
-                                const positive = pos.realizedPnL >= 0;
-                                return (
-                                  <div key={pos.ticker} className={`fm-ticker-card ${open ? "open" : ""}`}>
-                                    <button
-                                      type="button"
-                                      className="fm-ticker-toggle fm-ticker-toggle-pnl"
-                                      onClick={() => toggleTicker(key)}
-                                      aria-expanded={open}
-                                    >
-                                      <span className="fm-ticker-arrow" aria-hidden="true">▸</span>
-                                      <span className="fm-ticker-symbol">{pos.ticker}</span>
-                                      <span className="fm-ticker-name">{pos.securityName}</span>
-                                      <span className="fm-ticker-count">
-                                        {pos.buyQty.toLocaleString("en-US")} shares
-                                      </span>
-                                      <span className={positive ? "fm-ticker-pnl up" : "fm-ticker-pnl down"}>
-                                        {positive ? "+" : ""}
-                                        {pos.realizedPnL.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
-                                        {pos.currency}
-                                      </span>
-                                      <span className={positive ? "fm-ticker-pnl-pct up" : "fm-ticker-pnl-pct down"}>
-                                        {positive ? "+" : ""}
-                                        {(pos.realizedPnLPct * 100).toFixed(2)}%
-                                      </span>
-                                    </button>
-                                    {open ? (
-                                      <div className="fm-ticker-detail">
-                                        <div className="fm-position-summary">
-                                          <div>
-                                            <p>Total cost</p>
-                                            <strong>
-                                              {pos.totalCost.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
-                                              {pos.currency}
-                                            </strong>
-                                          </div>
-                                          <div>
-                                            <p>Total proceeds</p>
-                                            <strong>
-                                              {pos.totalProceeds.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
-                                              {pos.currency}
-                                            </strong>
-                                          </div>
-                                          <div>
-                                            <p>Realized P&amp;L</p>
-                                            <strong className={positive ? "cell-up" : "cell-down"}>
-                                              {positive ? "+" : ""}
-                                              {pos.realizedPnL.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
-                                              {pos.currency}
-                                            </strong>
-                                          </div>
-                                        </div>
-                                        <div className="fm-table-wrap">
-                                          <table className="fm-table fm-trade-detail-table">
-                                            <thead>
-                                              <tr>
-                                                <th>Date</th>
-                                                <th>Type</th>
-                                                <th>Shares</th>
-                                                <th>@ Price</th>
-                                                <th>SEC value</th>
-                                                <th>Total fees</th>
-                                                <th>Total</th>
-                                                <th>FX</th>
-                                                <th>Total USD</th>
-                                              </tr>
-                                            </thead>
-                                            <tbody>
-                                              {pos.trades.map((tr) => (
-                                                <tr key={tr.id}>
-                                                  <td>{tr.tradeDate}</td>
-                                                  <td>
-                                                    <span className={`trade-type ${tr.type.toLowerCase()}`}>
-                                                      {tr.type}
-                                                    </span>
-                                                  </td>
-                                                  <td>{tr.quantity.toLocaleString("en-US")}</td>
-                                                  <td>
-                                                    {tr.unitPrice.toLocaleString("en-US", {
-                                                      maximumFractionDigits: 4
-                                                    })}
-                                                  </td>
-                                                  <td>
-                                                    {tr.secTotal.toLocaleString("en-US", {
-                                                      maximumFractionDigits: 2
-                                                    })}
-                                                  </td>
-                                                  <td>
-                                                    {tr.totalFee.toLocaleString("en-US", {
-                                                      maximumFractionDigits: 4
-                                                    })}
-                                                  </td>
-                                                  <td>
-                                                    {tr.total.toLocaleString("en-US", {
-                                                      maximumFractionDigits: 2
-                                                    })}
-                                                  </td>
-                                                  <td>{tr.exchangeRate}</td>
-                                                  <td>{tr.totalUsd}</td>
-                                                </tr>
-                                              ))}
-                                            </tbody>
-                                          </table>
-                                        </div>
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </section>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="fm-empty">No closed positions yet.</p>
-                    )}
-                  </section>
                 </>
               ) : null}
 
@@ -2593,59 +2866,82 @@ export default function App() {
                                     {open ? (
                                       <div className="fm-ticker-detail">
                                         <div className="fm-investor-contact">
-                                          <span>📞 {inv.phone}</span>
-                                          <span>✉ {inv.email}</span>
+                                          <span>
+                                            <strong>{t("internal.users.colPhone")}:</strong> {inv.phone}
+                                          </span>
+                                          <span>
+                                            <strong>{t("internal.users.colEmail")}:</strong> {inv.email}
+                                          </span>
                                         </div>
                                         <div className="fm-table-wrap">
                                           <table className="fm-table">
                                             <thead>
                                               <tr>
                                                 <th>{t("internal.users.colTransferDate")}</th>
-                                                <th style={{ textAlign: "right" }}>{t("internal.users.colPurchased")}</th>
-                                                <th style={{ textAlign: "right" }}>{t("internal.users.colReturned")}</th>
-                                                <th style={{ textAlign: "right" }}>{t("internal.users.colActive")}</th>
+                                                <th>{t("internal.users.colType")}</th>
+                                                <th style={{ textAlign: "right" }}>{t("internal.users.colUnits")}</th>
                                                 <th style={{ textAlign: "right" }}>{t("internal.users.colUnitValue")}</th>
                                                 <th style={{ textAlign: "right" }}>{t("internal.users.colTransferAmount")}</th>
+                                                <th style={{ textAlign: "right" }}>{t("internal.users.colActive")}</th>
                                               </tr>
                                             </thead>
                                             <tbody>
-                                              {inv.subscriptions.map((s, i) => (
-                                                <tr key={`${inv.key}-${i}-${s.transferDate}`}>
-                                                  <td>{s.transferDate ?? "—"}</td>
-                                                  <td style={{ textAlign: "right" }}>
-                                                    {(s.unitsPurchased ?? 0).toLocaleString("en-US")}
-                                                  </td>
-                                                  <td
-                                                    style={{ textAlign: "right" }}
-                                                    className={(s.unitsReturned ?? 0) > 0 ? "cell-down" : undefined}
-                                                  >
-                                                    {(s.unitsReturned ?? 0) > 0
-                                                      ? `−${(s.unitsReturned ?? 0).toLocaleString("en-US")}`
-                                                      : "—"}
-                                                  </td>
-                                                  <td
-                                                    style={{ textAlign: "right" }}
-                                                    className={
-                                                      (s.unitsActive ?? 0) < (s.unitsPurchased ?? 0)
-                                                        ? "cell-down"
-                                                        : "cell-up"
-                                                    }
-                                                  >
-                                                    <strong>{(s.unitsActive ?? 0).toLocaleString("en-US")}</strong>
-                                                  </td>
-                                                  <td style={{ textAlign: "right" }}>
-                                                    {(s.unitValue ?? 0).toLocaleString("en-US", {
-                                                      maximumFractionDigits: 2
-                                                    })}{" "}
-                                                    MNT
-                                                  </td>
-                                                  <td style={{ textAlign: "right" }}>
-                                                    {(s.transferAmount ?? 0).toLocaleString("en-US", {
-                                                      maximumFractionDigits: 0
-                                                    })}
-                                                  </td>
-                                                </tr>
-                                              ))}
+                                              {(() => {
+                                                const rows: ReactElement[] = [];
+                                                let balance = 0;
+                                                inv.subscriptions.forEach((s, i) => {
+                                                  const buyUnits = s.unitsPurchased ?? 0;
+                                                  if (buyUnits > 0) {
+                                                    balance += buyUnits;
+                                                    rows.push(
+                                                      <tr key={`${inv.key}-${i}-buy`}>
+                                                        <td>{s.transferDate ?? "—"}</td>
+                                                        <td>
+                                                          <span className="trade-type buy">BUY</span>
+                                                        </td>
+                                                        <td style={{ textAlign: "right" }}>
+                                                          {buyUnits.toLocaleString("en-US")}
+                                                        </td>
+                                                        <td style={{ textAlign: "right" }}>
+                                                          {(s.unitValue ?? 0).toLocaleString("en-US", {
+                                                            maximumFractionDigits: 2
+                                                          })}{" "}
+                                                          MNT
+                                                        </td>
+                                                        <td style={{ textAlign: "right" }}>
+                                                          {(s.transferAmount ?? 0).toLocaleString("en-US", {
+                                                            maximumFractionDigits: 0
+                                                          })}
+                                                        </td>
+                                                        <td style={{ textAlign: "right" }}>
+                                                          <strong>{balance.toLocaleString("en-US")}</strong>
+                                                        </td>
+                                                      </tr>
+                                                    );
+                                                  }
+                                                  const sellUnits = s.unitsReturned ?? 0;
+                                                  if (sellUnits > 0) {
+                                                    balance -= sellUnits;
+                                                    rows.push(
+                                                      <tr key={`${inv.key}-${i}-sell`}>
+                                                        <td>—</td>
+                                                        <td>
+                                                          <span className="trade-type sell">SELL</span>
+                                                        </td>
+                                                        <td style={{ textAlign: "right" }} className="cell-down">
+                                                          −{sellUnits.toLocaleString("en-US")}
+                                                        </td>
+                                                        <td style={{ textAlign: "right" }}>—</td>
+                                                        <td style={{ textAlign: "right" }}>—</td>
+                                                        <td style={{ textAlign: "right" }}>
+                                                          <strong>{balance.toLocaleString("en-US")}</strong>
+                                                        </td>
+                                                      </tr>
+                                                    );
+                                                  }
+                                                });
+                                                return rows;
+                                              })()}
                                             </tbody>
                                           </table>
                                         </div>
@@ -2761,6 +3057,110 @@ export default function App() {
               ) : null}
             </main>
           </div>
+
+          {bondFormOpen ? (
+            <div className="modal" onClick={(event) => event.target === event.currentTarget && setBondFormOpen(false)}>
+              <div className="modal-card fm-bond-modal">
+                <h3>{t("internal.portfolio.bondModal.title")}</h3>
+                <form onSubmit={onSubmitBond}>
+                  <div className="fm-field-grid">
+                    <label className="fm-field">
+                      <span>{t("internal.portfolio.bondModal.ticker")}</span>
+                      <input
+                        value={bondForm.ticker}
+                        onChange={(e) => setBondForm((p) => ({ ...p, ticker: e.target.value }))}
+                        required
+                      />
+                    </label>
+                    <label className="fm-field">
+                      <span>{t("internal.portfolio.bondModal.name")}</span>
+                      <input
+                        value={bondForm.name}
+                        onChange={(e) => setBondForm((p) => ({ ...p, name: e.target.value }))}
+                        required
+                      />
+                    </label>
+                    <label className="fm-field">
+                      <span>{t("internal.portfolio.bondModal.yield")}</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={bondForm.yield}
+                        onChange={(e) => setBondForm((p) => ({ ...p, yield: e.target.value }))}
+                        required
+                      />
+                    </label>
+                    <label className="fm-field">
+                      <span>{t("internal.portfolio.bondModal.qty")}</span>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={bondForm.qty}
+                        onChange={(e) => setBondForm((p) => ({ ...p, qty: e.target.value }))}
+                        required
+                      />
+                    </label>
+                    <label className="fm-field">
+                      <span>{t("internal.portfolio.bondModal.value")}</span>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={bondForm.value}
+                        onChange={(e) => setBondForm((p) => ({ ...p, value: e.target.value }))}
+                        required
+                      />
+                    </label>
+                    <label className="fm-field">
+                      <span>{t("internal.portfolio.bondModal.purchaseInterest")}</span>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={bondForm.purchaseInterest}
+                        onChange={(e) => setBondForm((p) => ({ ...p, purchaseInterest: e.target.value }))}
+                      />
+                    </label>
+                    <label className="fm-field">
+                      <span>{t("internal.portfolio.bondModal.purchaseDate")}</span>
+                      <input
+                        type="date"
+                        value={bondForm.purchaseDate}
+                        onChange={(e) => setBondForm((p) => ({ ...p, purchaseDate: e.target.value }))}
+                        required
+                      />
+                    </label>
+                    <label className="fm-field">
+                      <span>{t("internal.portfolio.bondModal.paymentDate")}</span>
+                      <input
+                        type="date"
+                        value={bondForm.paymentDate}
+                        onChange={(e) => setBondForm((p) => ({ ...p, paymentDate: e.target.value }))}
+                      />
+                    </label>
+                    <label className="fm-field">
+                      <span>{t("internal.portfolio.bondModal.maturityDate")}</span>
+                      <input
+                        type="date"
+                        value={bondForm.maturityDate}
+                        onChange={(e) => setBondForm((p) => ({ ...p, maturityDate: e.target.value }))}
+                      />
+                    </label>
+                  </div>
+                  <div className="fm-card-actions">
+                    <button type="button" className="btn btn-ghost" onClick={() => setBondFormOpen(false)}>
+                      {t("internal.portfolio.bondModal.cancel")}
+                    </button>
+                    <button type="submit" className="btn btn-accent">
+                      {t("internal.portfolio.bondModal.submit")}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          ) : null}
         </div>
       );
     }
@@ -2772,7 +3172,7 @@ export default function App() {
             <a className="brand" href={`/?lang=${lang}`}>
               <img src="/assets/ubam-logo.png" alt="UB Asset Management logo" />
               <div>
-                <p className="brand-name">UB Asset Management</p>
+                <p className="brand-name">Улаанбаатар Ассет Менежмент ҮЦК ХХК</p>
                 <p className="brand-sub">{t("internal.brand")}</p>
               </div>
             </a>
@@ -2818,7 +3218,7 @@ export default function App() {
           <a className="brand" href="#home">
             <img src="/assets/ubam-logo.png" alt="UB Asset Management logo" />
             <div>
-              <p className="brand-name">UB Asset Management</p>
+              <p className="brand-name">Улаанбаатар Ассет Менежмент ҮЦК ХХК</p>
               <p className="brand-sub">{t("brand.sub")}</p>
             </div>
           </a>

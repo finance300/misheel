@@ -239,6 +239,32 @@ with open(OUT / "fund-trades.json", "w", encoding="utf-8") as f:
 
 print(f"[trades]  {len(trades)} trade confirmations")
 
+# ---------- Per-ticker BUY/SELL/TOTAL/TOTAL (After Split) summary ----------
+# Lives in columns 23..29 of the Trade Confirmation sheet (the right-hand block).
+ticker_summary = []
+for r in range(2, tc.max_row + 1):
+    typ = col(tc, r, 23)
+    ticker = col(tc, r, 25)
+    if not ticker:
+        continue
+    ticker_summary.append({
+        "type": typ,
+        "currency": col(tc, r, 24),
+        "ticker": str(ticker).strip(),
+        "buy": num(col(tc, r, 26)),
+        "sell": num(col(tc, r, 27)),
+        "total": num(col(tc, r, 28)),
+        "totalAfterSplit": num(col(tc, r, 29)),
+    })
+
+with open(OUT / "fund-trade-summary.json", "w", encoding="utf-8") as f:
+    json.dump(ticker_summary, f, ensure_ascii=False, indent=2)
+split_count = sum(
+    1 for s in ticker_summary
+    if s["total"] is not None and s["totalAfterSplit"] is not None and abs(s["total"] - s["totalAfterSplit"]) > 0.001
+)
+print(f"[summary] {len(ticker_summary)} tickers · {split_count} with active split")
+
 # ---------- Bank accounts ----------
 bank_sheets = [
     {"name": "Bank 0134 (USD)", "accountNumber": "0134", "currency": "USD", "alias": "USD trading"},
