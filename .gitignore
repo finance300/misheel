@@ -7,3 +7,9 @@ dist/
 coverage/
 .vscode/
 .idea/
+
+# Real fund data — workbook + extracted JSON contain investor PII and bank
+# account history. Keep them local only. Anyone cloning regenerates JSON by
+# running `python3 scripts/extract-fund-data.py` against their own workbook.
+*.xlsx
+src/data/*.json
