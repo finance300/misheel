@@ -1,4 +1,5 @@
-import { type FormEvent, type ReactElement, useMemo, useState } from "react";
+import { type FormEvent, type ReactElement, useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import { fundCalc, fundInputs } from "./data/fund-calc";
 import fundTrades from "./data/fund-trades.json";
 import fundBanks from "./data/fund-banks.json";
@@ -193,6 +194,22 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.portfolio.edit": "Засах",
     "internal.portfolio.bondAdd": "Бонд нэмэх",
     "internal.trades.stockAdd": "Хувьцаа нэмэх",
+    "internal.trades.excelImport": "Excel оруулах",
+    "internal.trades.manualEntry": "Гараар оруулах",
+    "internal.trades.splitBtn": "Хуваалт",
+    "internal.trades.splitModal.title": "Хувьцааны хуваалт",
+    "internal.trades.splitModal.hint": "Жишээ: 10 : 1 → 1 хувьцаа 10 хувьцаа болно. Дундаж үнэ автоматаар хуваагдана.",
+    "internal.trades.splitModal.new": "Шинэ",
+    "internal.trades.splitModal.old": "Хуучин",
+    "internal.trades.splitModal.apply": "Хэрэглэх",
+    "internal.trades.addChoiceTitle": "Хувьцаа хэрхэн нэмэх вэ?",
+    "internal.trades.preview.title": "Импортын урьдчилсан харагдац",
+    "internal.trades.preview.found": "мөр илрэв",
+    "internal.trades.preview.missing": "Дутуу багана",
+    "internal.trades.preview.allFound": "Бүх шаардлагатай баганууд оллоо",
+    "internal.trades.preview.confirm": "Импортлох",
+    "internal.trades.preview.cancel": "Болих",
+    "internal.trades.preview.sample": "Эхний 5 мөр",
     "internal.portfolio.bondModal.title": "Шинэ бонд бүртгэх",
     "internal.portfolio.bondModal.ticker": "Тикер",
     "internal.portfolio.bondModal.name": "Нэр",
@@ -201,7 +218,8 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.portfolio.bondModal.value": "Үнэлгээ (MNT)",
     "internal.portfolio.bondModal.purchaseInterest": "Худалдан авсан үед төлсөн хүү (MNT)",
     "internal.portfolio.bondModal.purchaseDate": "Худалдан авсан огноо",
-    "internal.portfolio.bondModal.paymentDate": "Хүү төлөх огноо",
+    "internal.portfolio.bondModal.paymentDates": "Хүү төлөх огноонууд",
+    "internal.portfolio.bondModal.addPaymentDate": "Огноо нэмэх",
     "internal.portfolio.bondModal.maturityDate": "Дуусах огноо",
     "internal.portfolio.bondModal.submit": "Хадгалах",
     "internal.portfolio.bondModal.cancel": "Болих",
@@ -448,6 +466,22 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.portfolio.edit": "Edit",
     "internal.portfolio.bondAdd": "Add bond",
     "internal.trades.stockAdd": "Add stock",
+    "internal.trades.excelImport": "Import Excel",
+    "internal.trades.manualEntry": "Enter manually",
+    "internal.trades.splitBtn": "Split",
+    "internal.trades.splitModal.title": "Stock split",
+    "internal.trades.splitModal.hint": "Example: 10 : 1 → 1 share becomes 10. Average price is divided accordingly.",
+    "internal.trades.splitModal.new": "New",
+    "internal.trades.splitModal.old": "Old",
+    "internal.trades.splitModal.apply": "Apply",
+    "internal.trades.addChoiceTitle": "How would you like to add the stock?",
+    "internal.trades.preview.title": "Import preview",
+    "internal.trades.preview.found": "rows detected",
+    "internal.trades.preview.missing": "Missing columns",
+    "internal.trades.preview.allFound": "All required columns detected",
+    "internal.trades.preview.confirm": "Import",
+    "internal.trades.preview.cancel": "Cancel",
+    "internal.trades.preview.sample": "First 5 rows",
     "internal.portfolio.bondModal.title": "Register new bond",
     "internal.portfolio.bondModal.ticker": "Ticker",
     "internal.portfolio.bondModal.name": "Name",
@@ -1007,6 +1041,120 @@ export default function App() {
   const [tradeEntryOpen, setTradeEntryOpen] = useState(false);
   const [proposals, setProposals] = useState<Proposal[]>(initialProposals);
   const [tradeConfirmations, setTradeConfirmations] = useState<TradeConfirmation[]>(initialTradeConfirmations);
+  const tradeFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [stockAddChoiceOpen, setStockAddChoiceOpen] = useState(false);
+  type ExcelPreview = {
+    rows: TradeConfirmation[];
+    detected: string[];
+    missing: string[];
+    fileName: string;
+    error?: string;
+  };
+  const [excelPreview, setExcelPreview] = useState<ExcelPreview | null>(null);
+  const REQUIRED_TRADE_COLUMNS = ["Ticker", "TYPE", "Quantity", "Unit price", "Date - trade"];
+  const onImportTrades = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const wb = XLSX.read(data, { type: "array", cellDates: true });
+        const sheetName = wb.SheetNames.find((n) => /trade/i.test(n)) ?? wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
+        const detected = rows.length ? Object.keys(rows[0]) : [];
+        const missing = REQUIRED_TRADE_COLUMNS.filter((c) => !detected.includes(c));
+        const toIsoDate = (v: unknown): string => {
+          if (v instanceof Date) return v.toISOString().slice(0, 10);
+          if (typeof v === "number") {
+            const d = XLSX.SSF.parse_date_code(v);
+            if (d) {
+              const yyyy = String(d.y).padStart(4, "0");
+              const mm = String(d.m).padStart(2, "0");
+              const dd = String(d.d).padStart(2, "0");
+              return `${yyyy}-${mm}-${dd}`;
+            }
+          }
+          return String(v ?? "");
+        };
+        const parsed: TradeConfirmation[] = [];
+        rows.forEach((row, idx) => {
+          const ticker = String(row["Ticker"] ?? "").trim();
+          if (!ticker) return;
+          parsed.push({
+            id: Date.now() + idx,
+            securityType: String(row["Security type"] ?? "Stock"),
+            type: String(row["TYPE"] ?? "BUY"),
+            currency: String(row["Currency"] ?? "MNT"),
+            tradeDate: toIsoDate(row["Date - trade"]),
+            settleDate: toIsoDate(row["Date - settle"] ?? row["Date - trade"]),
+            securityName: String(row["Security name"] ?? ""),
+            ticker,
+            instrumentType: String(row["Inst. Type"] ?? "RVP"),
+            portfolioClass: String(row["Portfolio class"] ?? "Equity"),
+            quantity: Number(row["Quantity"] ?? 0),
+            unitPrice: Number(row["Unit price"] ?? 0),
+            secTotal: Number(row["SEC total"] ?? 0),
+            feePerc: Number(row["Fee perc."] ?? 0),
+            feeAmount: Number(row["Fee amount"] ?? 0),
+            fixedFee: Number(row["Fixed fee"] ?? 0),
+            totalFee: Number(row["Total fee"] ?? 0),
+            total: Number(row["Total"] ?? 0),
+            exchangeRate: String(row["Exchange rate"] ?? "-"),
+            totalUsd: String(row["Total USD"] ?? "-"),
+            stockSplit: String(row["Stock split"] ?? "-"),
+            description: String(row["Description"] ?? "-")
+          });
+        });
+        setExcelPreview({
+          rows: parsed,
+          detected,
+          missing,
+          fileName: file.name,
+          error: parsed.length === 0 ? "Үнэтэй мөр олдсонгүй" : undefined
+        });
+      } catch (err) {
+        console.error(err);
+        setExcelPreview({
+          rows: [],
+          detected: [],
+          missing: REQUIRED_TRADE_COLUMNS,
+          fileName: file.name,
+          error: "Файлыг уншиж чадсангүй"
+        });
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+  const [splitTicker, setSplitTicker] = useState<{ currency: string; ticker: string } | null>(null);
+  const [splitForm, setSplitForm] = useState({ newShares: "", oldShares: "" });
+  const applySplit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!splitTicker) return;
+    const ns = Number(splitForm.newShares);
+    const os = Number(splitForm.oldShares);
+    if (!Number.isFinite(ns) || !Number.isFinite(os) || ns <= 0 || os <= 0) return;
+    const factor = ns / os;
+    setTradeConfirmations((current) =>
+      current.map((tr) => {
+        if (tr.ticker !== splitTicker.ticker || (tr.currency || "MNT") !== splitTicker.currency) return tr;
+        return {
+          ...tr,
+          quantity: tr.quantity * factor,
+          unitPrice: tr.unitPrice / factor
+        };
+      })
+    );
+    setSplitTicker(null);
+    setSplitForm({ newShares: "", oldShares: "" });
+  };
+  const confirmExcelImport = () => {
+    if (!excelPreview) return;
+    setTradeConfirmations((current) => [...excelPreview.rows, ...current]);
+    setImportStatus(`+${excelPreview.rows.length} мөр импортлогдсон`);
+    setExcelPreview(null);
+    setTimeout(() => setImportStatus(null), 4000);
+  };
   const [navApproval, setNavApproval] = useState<NavApproval | null>(null);
   const [expandedTickers, setExpandedTickers] = useState<Set<string>>(new Set());
   const [usersSegment, setUsersSegment] = useState<"workers" | "investors">("workers");
@@ -1385,6 +1533,7 @@ export default function App() {
       settlementLag: "1",
       description: "-"
     }));
+    setTradeEntryOpen(false);
   };
 
   if (initialInternal) {
@@ -1977,12 +2126,26 @@ export default function App() {
               {activeFundTab === "trades" ? (
                 <div className="fm-trades-layout">
                   <div className="fm-trade-actions">
+                    <input
+                      ref={tradeFileInputRef}
+                      type="file"
+                      accept=".xlsx,.xls"
+                      style={{ display: "none" }}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) onImportTrades(file);
+                        if (tradeFileInputRef.current) tradeFileInputRef.current.value = "";
+                      }}
+                    />
+                    {importStatus ? (
+                      <span className="fm-import-status">{importStatus}</span>
+                    ) : null}
                     <button
                       type="button"
                       className="btn btn-accent"
-                      onClick={() => setTradeEntryOpen((current) => !current)}
+                      onClick={() => setStockAddChoiceOpen(true)}
                     >
-                      {tradeEntryOpen ? "−" : "+"} {t("internal.trades.stockAdd")}
+                      + {t("internal.trades.stockAdd")}
                     </button>
                     <button
                       type="button"
@@ -1993,19 +2156,32 @@ export default function App() {
                     </button>
                   </div>
                   {tradeEntryOpen ? (
-                  <form className="fm-form fm-card" onSubmit={onSubmitTradeConfirmation}>
-                            {tradeEntryOpen ? (
-                              <>
-                                <div className="fm-field-grid">
+                    <div
+                      className="modal"
+                      onClick={(event) =>
+                        event.target === event.currentTarget && setTradeEntryOpen(false)
+                      }
+                    >
+                      <div className="modal-card fm-trade-modal">
+                        <h3>{t("internal.trades.entryTitle")}</h3>
+                        <form onSubmit={onSubmitTradeConfirmation}>
+                          <div className="fm-field-grid">
                                   <label className="fm-field">
                                     <span>Security type</span>
-                                    <input
+                                    <select
                                       value={tradeForm.securityType}
-                                      onChange={(event) =>
-                                        setTradeForm((current) => ({ ...current, securityType: event.target.value }))
-                                      }
-                                      required
-                                    />
+                                      onChange={(event) => {
+                                        const next = event.target.value;
+                                        setTradeForm((current) => ({
+                                          ...current,
+                                          securityType: next,
+                                          portfolioClass: next === "Option" ? "Option" : "Equity"
+                                        }));
+                                      }}
+                                    >
+                                      <option value="Stock">Stock</option>
+                                      <option value="Option">Option</option>
+                                    </select>
                                   </label>
 
                                   <label className="fm-field">
@@ -2021,11 +2197,14 @@ export default function App() {
 
                                   <label className="fm-field">
                                     <span>Currency</span>
-                                    <input
+                                    <select
                                       value={tradeForm.currency}
                                       onChange={(event) => setTradeForm((current) => ({ ...current, currency: event.target.value }))}
-                                      required
-                                    />
+                                    >
+                                      {Object.keys(fundInputs.fxRates).map((cur) => (
+                                        <option key={cur} value={cur}>{cur}</option>
+                                      ))}
+                                    </select>
                                   </label>
 
                                   <label className="fm-field">
@@ -2045,19 +2224,6 @@ export default function App() {
                                     <input type="date" value={currentSettleDate} readOnly />
                                   </label>
 
-                                  <label className="fm-field">
-                                    <span>Settlement lag (days)</span>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      step="1"
-                                      value={tradeForm.settlementLag}
-                                      onChange={(event) =>
-                                        setTradeForm((current) => ({ ...current, settlementLag: event.target.value }))
-                                      }
-                                      required
-                                    />
-                                  </label>
 
                                   <label className="fm-field">
                                     <span>Security name</span>
@@ -2090,16 +2256,6 @@ export default function App() {
                                     />
                                   </label>
 
-                                  <label className="fm-field">
-                                    <span>Portfolio class</span>
-                                    <input
-                                      value={tradeForm.portfolioClass}
-                                      onChange={(event) =>
-                                        setTradeForm((current) => ({ ...current, portfolioClass: event.target.value }))
-                                      }
-                                      required
-                                    />
-                                  </label>
 
                                   <label className="fm-field">
                                     <span>Quantity</span>
@@ -2167,35 +2323,25 @@ export default function App() {
                                     />
                                   </label>
 
-                                  <label className="fm-field">
-                                    <span>Stock split</span>
-                                    <input
-                                      value={tradeForm.stockSplit}
-                                      onChange={(event) =>
-                                        setTradeForm((current) => ({ ...current, stockSplit: event.target.value }))
-                                      }
-                                    />
-                                  </label>
 
-                                  <label className="fm-field fm-field-full">
-                                    <span>Description</span>
-                                    <textarea
-                                      rows={2}
-                                      value={tradeForm.description}
-                                      onChange={(event) =>
-                                        setTradeForm((current) => ({ ...current, description: event.target.value }))
-                                      }
-                                    />
-                                  </label>
-                                </div>
+                          </div>
 
-                                <button className="btn btn-accent fm-submit" type="submit">
-                                  {t("internal.trades.submit")}
-                                </button>
-                              </>
-                            ) : null}
-                          </form>
-                          ) : null}
+                          <div className="fm-card-actions">
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              onClick={() => setTradeEntryOpen(false)}
+                            >
+                              {t("internal.trades.preview.cancel")}
+                            </button>
+                            <button className="btn btn-accent" type="submit">
+                              {t("internal.trades.submit")}
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  ) : null}
 
                           <div className="fm-segment">
                             <button
@@ -2262,33 +2408,46 @@ export default function App() {
                                         const displayShares = hasSplit ? splitInfo!.afterSplit : netQty;
                                         return (
                                           <div key={ticker} className={`fm-ticker-card ${open ? "open" : ""}`}>
-                                            <button
-                                              type="button"
-                                              className="fm-ticker-toggle"
-                                              onClick={() => toggleTicker(key)}
-                                              aria-expanded={open}
-                                            >
-                                              <span className="fm-ticker-arrow" aria-hidden="true">
-                                                ▸
-                                              </span>
-                                              <span className="fm-ticker-symbol">{ticker}</span>
-                                              <span className="fm-ticker-name">{securityName}</span>
-                                              <span className="fm-ticker-net">
-                                                {displayShares.toLocaleString("en-US", {
-                                                  maximumFractionDigits: 4
-                                                })}{" "}
-                                                shares
-                                                {hasSplit ? (
-                                                  <span className="fm-ticker-split">
-                                                    {" "}
-                                                    (was {splitInfo!.total.toLocaleString("en-US")} pre-split)
-                                                  </span>
-                                                ) : null}
-                                              </span>
-                                              <span className="fm-ticker-count">
-                                                {trades.length} {trades.length === 1 ? "trade" : "trades"}
-                                              </span>
-                                            </button>
+                                            <div className="fm-ticker-row">
+                                              <button
+                                                type="button"
+                                                className="fm-ticker-toggle"
+                                                onClick={() => toggleTicker(key)}
+                                                aria-expanded={open}
+                                              >
+                                                <span className="fm-ticker-arrow" aria-hidden="true">
+                                                  ▸
+                                                </span>
+                                                <span className="fm-ticker-symbol">{ticker}</span>
+                                                <span className="fm-ticker-name">{securityName}</span>
+                                                <span className="fm-ticker-net">
+                                                  {displayShares.toLocaleString("en-US", {
+                                                    maximumFractionDigits: 4
+                                                  })}{" "}
+                                                  shares
+                                                  {hasSplit ? (
+                                                    <span className="fm-ticker-split">
+                                                      {" "}
+                                                      (was {splitInfo!.total.toLocaleString("en-US")} pre-split)
+                                                    </span>
+                                                  ) : null}
+                                                </span>
+                                                <span className="fm-ticker-count">
+                                                  {trades.length} {trades.length === 1 ? "trade" : "trades"}
+                                                </span>
+                                              </button>
+                                              <button
+                                                type="button"
+                                                className="fm-ticker-split-btn"
+                                                onClick={() => {
+                                                  setSplitTicker({ currency, ticker });
+                                                  setSplitForm({ newShares: "", oldShares: "" });
+                                                }}
+                                                title={t("internal.trades.splitModal.title")}
+                                              >
+                                                ⇄ {t("internal.trades.splitBtn")}
+                                              </button>
+                                            </div>
                                             {open ? (
                                               <div className="fm-ticker-detail">
                                                 <div className="fm-table-wrap">
@@ -3057,6 +3216,200 @@ export default function App() {
               ) : null}
             </main>
           </div>
+
+          {splitTicker ? (
+            <div
+              className="modal"
+              onClick={(event) => event.target === event.currentTarget && setSplitTicker(null)}
+            >
+              <div className="modal-card fm-split-modal">
+                <h3>{t("internal.trades.splitModal.title")}</h3>
+                <p className="fm-card-sub">
+                  <strong>{splitTicker.ticker}</strong> · {splitTicker.currency}
+                </p>
+                <form onSubmit={applySplit}>
+                  <div className="fm-split-fields">
+                    <label className="fm-field">
+                      <span>{t("internal.trades.splitModal.new")}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={splitForm.newShares}
+                        onChange={(e) => setSplitForm((p) => ({ ...p, newShares: e.target.value }))}
+                        required
+                      />
+                    </label>
+                    <span className="fm-split-colon">:</span>
+                    <label className="fm-field">
+                      <span>{t("internal.trades.splitModal.old")}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={splitForm.oldShares}
+                        onChange={(e) => setSplitForm((p) => ({ ...p, oldShares: e.target.value }))}
+                        required
+                      />
+                    </label>
+                  </div>
+                  <div className="fm-card-actions">
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => setSplitTicker(null)}
+                    >
+                      {t("internal.trades.preview.cancel")}
+                    </button>
+                    <button type="submit" className="btn btn-accent">
+                      {t("internal.trades.splitModal.apply")}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          ) : null}
+
+          {stockAddChoiceOpen ? (
+            <div
+              className="modal"
+              onClick={(event) => event.target === event.currentTarget && setStockAddChoiceOpen(false)}
+            >
+              <div className="modal-card fm-choice-modal">
+                <h3>{t("internal.trades.addChoiceTitle")}</h3>
+                <div className="fm-choice-grid">
+                  <button
+                    type="button"
+                    className="fm-choice-btn"
+                    onClick={() => {
+                      setStockAddChoiceOpen(false);
+                      setTradeEntryOpen(true);
+                    }}
+                  >
+                    <strong>{t("internal.trades.manualEntry")}</strong>
+                  </button>
+                  <button
+                    type="button"
+                    className="fm-choice-btn"
+                    onClick={() => {
+                      setStockAddChoiceOpen(false);
+                      tradeFileInputRef.current?.click();
+                    }}
+                  >
+                    <strong>{t("internal.trades.excelImport")}</strong>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-ghost full"
+                  onClick={() => setStockAddChoiceOpen(false)}
+                >
+                  {t("internal.trades.preview.cancel")}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {excelPreview ? (
+            <div
+              className="modal"
+              onClick={(event) => event.target === event.currentTarget && setExcelPreview(null)}
+            >
+              <div className="modal-card fm-preview-modal">
+                <h3>{t("internal.trades.preview.title")}</h3>
+                <p className="fm-card-sub">
+                  <strong>{excelPreview.fileName}</strong> · {excelPreview.rows.length}{" "}
+                  {t("internal.trades.preview.found")}
+                </p>
+
+                {excelPreview.error ? (
+                  <div className="fm-preview-warning">⚠ {excelPreview.error}</div>
+                ) : null}
+
+                {excelPreview.missing.length > 0 ? (
+                  <div className="fm-preview-warning">
+                    <strong>{t("internal.trades.preview.missing")}:</strong>{" "}
+                    {excelPreview.missing.join(", ")}
+                  </div>
+                ) : (
+                  <div className="fm-preview-ok">✓ {t("internal.trades.preview.allFound")}</div>
+                )}
+
+                <div className="fm-preview-columns">
+                  {REQUIRED_TRADE_COLUMNS.map((col) => {
+                    const found = excelPreview.detected.includes(col);
+                    return (
+                      <span key={col} className={`fm-preview-col ${found ? "found" : "missing"}`}>
+                        {found ? "✓" : "✗"} {col}
+                      </span>
+                    );
+                  })}
+                </div>
+
+                {excelPreview.rows.length > 0 ? (
+                  <>
+                    <p className="fm-card-sub" style={{ marginTop: "0.85rem" }}>
+                      {t("internal.trades.preview.sample")}
+                    </p>
+                    <div className="fm-table-wrap">
+                      <table className="fm-table fm-preview-table">
+                        <thead>
+                          <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Ticker</th>
+                            <th>Qty</th>
+                            <th>Price</th>
+                            <th>Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {excelPreview.rows.slice(0, 5).map((r) => (
+                            <tr key={r.id}>
+                              <td>{r.tradeDate}</td>
+                              <td>
+                                <span className={`trade-type ${r.type.toLowerCase()}`}>{r.type}</span>
+                              </td>
+                              <td>
+                                <strong>{r.ticker}</strong>
+                              </td>
+                              <td style={{ textAlign: "right" }}>
+                                {r.quantity.toLocaleString("en-US")}
+                              </td>
+                              <td style={{ textAlign: "right" }}>
+                                {r.unitPrice.toLocaleString("en-US", { maximumFractionDigits: 4 })}
+                              </td>
+                              <td style={{ textAlign: "right" }}>
+                                {r.total.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                ) : null}
+
+                <div className="fm-card-actions">
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => setExcelPreview(null)}
+                  >
+                    {t("internal.trades.preview.cancel")}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-accent"
+                    disabled={excelPreview.rows.length === 0}
+                    onClick={confirmExcelImport}
+                  >
+                    {t("internal.trades.preview.confirm")} ({excelPreview.rows.length})
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {bondFormOpen ? (
             <div className="modal" onClick={(event) => event.target === event.currentTarget && setBondFormOpen(false)}>
