@@ -283,6 +283,32 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.bank.colCredit": "Орлого",
     "internal.bank.colEnd": "Үлдэгдэл",
     "internal.bank.colCounterpart": "Харьцсан данс",
+    "internal.bank.colType": "Гүйлгээний төрөл",
+    "internal.bank.typePlaceholder": "Сонгох",
+    "internal.bank.showLegacy": "Хуучин данс харах (8863)",
+    "internal.bank.legacyBadge": "Хуучин",
+    "internal.bank.uploadExcel": "Excel оруулах",
+    "internal.bank.type.0": "Данс хооронд",
+    "internal.bank.type.1": "Харилцагч орлого",
+    "internal.bank.type.2": "Харилцагч буцаалт",
+    "internal.bank.type.3": "Бонд",
+    "internal.bank.type.4": "Бондын хүү",
+    "internal.bank.type.5": "Гадаад арилжаа",
+    "internal.bank.type.6": "Дотоод арилжаа",
+    "internal.bank.type.7": "USD",
+    "internal.bank.type.8": "ХОМК шимтгэл",
+    "internal.bank.type.9": "Брокер шимтгэл",
+    "internal.bank.type.10": "Бусад шимтгэл",
+    "internal.bank.type.11": "Данс хөтөлсний шимтгэл",
+    "internal.bank.type.12": "Гүйлгээний шимтгэл",
+    "internal.bank.summary.title": "Гүйлгээний төрлийн нэгтгэл",
+    "internal.bank.summary.colCode": "Код",
+    "internal.bank.summary.colLabel": "Утга",
+    "internal.bank.summary.colPlus": "(+)",
+    "internal.bank.summary.colMinus": "(-)",
+    "internal.bank.summary.total": "Нийт",
+    "internal.bank.summary.balance": "Төгрөг үлдэгдэл",
+    "internal.bank.summary.pending": "Хүлээгдэж байгаа",
     "internal.page.newTrades.title": "Шинэ арилжааны санал",
     "internal.page.newTrades.subtitle": "Өнөөдөр хийх арилжааны саналыг ТУЗ-д танилцуулна.",
     "internal.page.realized.title": "Арилжааны түүх",
@@ -554,6 +580,32 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.bank.colCredit": "Credit",
     "internal.bank.colEnd": "Balance",
     "internal.bank.colCounterpart": "Counterpart",
+    "internal.bank.colType": "Type",
+    "internal.bank.typePlaceholder": "Choose",
+    "internal.bank.showLegacy": "Show legacy account (8863)",
+    "internal.bank.legacyBadge": "Legacy",
+    "internal.bank.uploadExcel": "Upload Excel",
+    "internal.bank.type.0": "Between accounts",
+    "internal.bank.type.1": "Counterparty income",
+    "internal.bank.type.2": "Counterparty refund",
+    "internal.bank.type.3": "Bond",
+    "internal.bank.type.4": "Bond interest",
+    "internal.bank.type.5": "Foreign trade",
+    "internal.bank.type.6": "Domestic trade",
+    "internal.bank.type.7": "USD",
+    "internal.bank.type.8": "Custody fee",
+    "internal.bank.type.9": "Broker fee",
+    "internal.bank.type.10": "Other fee",
+    "internal.bank.type.11": "Account maintenance fee",
+    "internal.bank.type.12": "Transaction fee",
+    "internal.bank.summary.title": "Transaction-type summary",
+    "internal.bank.summary.colCode": "Code",
+    "internal.bank.summary.colLabel": "Description",
+    "internal.bank.summary.colPlus": "(+)",
+    "internal.bank.summary.colMinus": "(-)",
+    "internal.bank.summary.total": "Total",
+    "internal.bank.summary.balance": "Balance",
+    "internal.bank.summary.pending": "Pending",
     "internal.page.newTrades.title": "New Trade Proposals",
     "internal.page.newTrades.subtitle": "Submit trades for the day so the board can vote on them.",
     "internal.page.realized.title": "Sold Stocks' P&L",
@@ -1157,9 +1209,35 @@ export default function App() {
   };
   const [navApproval, setNavApproval] = useState<NavApproval | null>(null);
   const [expandedTickers, setExpandedTickers] = useState<Set<string>>(new Set());
-  const [usersSegment, setUsersSegment] = useState<"workers" | "investors">("workers");
+  const [usersSegment, setUsersSegment] = useState<"workers" | "investors">("investors");
   const [tradesSegment, setTradesSegment] = useState<"active" | "inactive">("active");
   const [bondFormOpen, setBondFormOpen] = useState(false);
+  const [activeBankAccount, setActiveBankAccount] = useState<string>("0134");
+  const [bankTxnTypes, setBankTxnTypes] = useState<Record<string, string>>({});
+  const [bankPending, setBankPending] = useState<Record<string, string>>({});
+  const [bankImportStatus, setBankImportStatus] = useState<string | null>(null);
+  const bankFileInputRef = useRef<HTMLInputElement | null>(null);
+  const onBankExcelFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result;
+        const wb = XLSX.read(data, { type: "array", cellDates: true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
+        setBankImportStatus(
+          lang === "mn"
+            ? `${file.name} хүлээн авлаа (${rows.length} мөр)`
+            : `Received ${file.name} (${rows.length} rows)`
+        );
+        setTimeout(() => setBankImportStatus(null), 5000);
+      } catch {
+        setBankImportStatus(lang === "mn" ? "Файл уншиж чадсангүй" : "Could not read file");
+        setTimeout(() => setBankImportStatus(null), 5000);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
   type AddedBond = {
     ticker: string;
     name: string;
@@ -2618,37 +2696,43 @@ export default function App() {
               {activeFundTab === "bank" ? (
                 <>
                   {(() => {
-                    const banks = fundBanks as BankAccount[];
-                    const fxRates = fundInputs.fxRates as Record<string, number>;
-                    const totalMnt = banks.reduce(
-                      (sum, b) => sum + (b.currentBalance ?? 0) * (fxRates[b.currency] ?? 1),
-                      0
+                    const allBanks = fundBanks as BankAccount[];
+                    const LEGACY_ACCOUNT = "8863";
+                    const activeBank =
+                      allBanks.find((b) => b.accountNumber === activeBankAccount) ?? allBanks[0];
+                    const typeOptions: Array<{ value: string; label: string }> = Array.from(
+                      { length: 13 },
+                      (_, i) => ({ value: String(i), label: t(`internal.bank.type.${i}`) })
                     );
                     return (
                       <>
-                        <div className="fm-stats">
-                          <article className="fm-stat-card primary">
-                            <p>{t("internal.bank.totalBalance")}</p>
-                            <strong>
-                              {totalMnt.toLocaleString("en-US", { maximumFractionDigits: 0 })} MNT
-                            </strong>
-                          </article>
-                          {banks.map((bank) => (
-                            <article className="fm-stat-card" key={bank.accountNumber}>
-                              <p>
-                                {bank.alias} · {bank.accountNumber}
-                              </p>
-                              <strong>
-                                {(bank.currentBalance ?? 0).toLocaleString("en-US", {
-                                  maximumFractionDigits: 2
-                                })}{" "}
-                                {bank.currency}
-                              </strong>
-                            </article>
-                          ))}
+                        <div className="fm-bank-toggle">
+                          <label className="fm-field fm-bank-select-field">
+                            <span>{t("internal.bank.account")}</span>
+                            <select
+                              value={activeBank?.accountNumber ?? ""}
+                              onChange={(event) => setActiveBankAccount(event.target.value)}
+                            >
+                              {allBanks.map((bank) => {
+                                const isLegacy = bank.accountNumber === LEGACY_ACCOUNT;
+                                return (
+                                  <option key={bank.accountNumber} value={bank.accountNumber}>
+                                    {bank.alias} · {bank.accountNumber} · {bank.currency}
+                                    {isLegacy ? ` (${t("internal.bank.legacyBadge")})` : ""}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          </label>
+                          {activeBank?.accountNumber === LEGACY_ACCOUNT ? (
+                            <span className="fm-bank-legacy-badge fm-bank-legacy-badge-inline">
+                              {t("internal.bank.legacyBadge")}
+                            </span>
+                          ) : null}
                         </div>
 
-                        {banks.map((bank) => {
+                        {activeBank ? (() => {
+                          const bank = activeBank;
                           const txns = [...bank.transactions].sort((a, b) =>
                             a.date < b.date ? 1 : -1
                           );
@@ -2676,8 +2760,147 @@ export default function App() {
                                     ) : null}
                                   </p>
                                 </div>
-                                <span className="fm-topbar-tag">{bank.currency}</span>
+                                <div className="fm-bank-head-actions">
+                                  {bankImportStatus ? (
+                                    <span className="fm-import-status">{bankImportStatus}</span>
+                                  ) : null}
+                                  <input
+                                    ref={bankFileInputRef}
+                                    type="file"
+                                    accept=".xlsx,.xls"
+                                    style={{ display: "none" }}
+                                    onChange={(event) => {
+                                      const file = event.target.files?.[0];
+                                      if (file) onBankExcelFile(file);
+                                      if (bankFileInputRef.current) bankFileInputRef.current.value = "";
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="btn btn-accent"
+                                    onClick={() => bankFileInputRef.current?.click()}
+                                  >
+                                    + {t("internal.bank.uploadExcel")}
+                                  </button>
+                                </div>
                               </header>
+
+                              {(() => {
+                                const totalsByCode: Record<string, { plus: number; minus: number }> = {};
+                                for (let i = 0; i < 13; i++) totalsByCode[String(i)] = { plus: 0, minus: 0 };
+                                txns.slice(0, 25).forEach((tx, idx) => {
+                                  const txKey = `${bank.accountNumber}-${idx}-${tx.date}`;
+                                  const code = bankTxnTypes[txKey];
+                                  if (!code || !(code in totalsByCode)) return;
+                                  totalsByCode[code].plus += tx.credit ?? 0;
+                                  totalsByCode[code].minus += tx.debit ?? 0;
+                                });
+                                const totalPlus = Object.values(totalsByCode).reduce(
+                                  (s, v) => s + v.plus,
+                                  0
+                                );
+                                const totalMinus = Object.values(totalsByCode).reduce(
+                                  (s, v) => s + v.minus,
+                                  0
+                                );
+                                const balance = bank.currentBalance ?? 0;
+                                const fmt = (n: number) =>
+                                  n.toLocaleString("en-US", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                  });
+                                return (
+                                  <div className="fm-bank-summary">
+                                    <h3 className="fm-bank-summary-title">
+                                      {t("internal.bank.summary.title")}
+                                    </h3>
+                                    <div className="fm-table-wrap">
+                                      <table className="fm-table fm-bank-summary-table">
+                                        <thead>
+                                          <tr>
+                                            <th style={{ textAlign: "center" }}>
+                                              {t("internal.bank.summary.colCode")}
+                                            </th>
+                                            <th>{t("internal.bank.summary.colLabel")}</th>
+                                            <th style={{ textAlign: "right" }}>
+                                              {t("internal.bank.summary.colPlus")}
+                                            </th>
+                                            <th style={{ textAlign: "right" }}>
+                                              {t("internal.bank.summary.colMinus")}
+                                            </th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {Array.from({ length: 13 }, (_, code) => {
+                                            const v = totalsByCode[String(code)];
+                                            return (
+                                              <tr key={code}>
+                                                <td style={{ textAlign: "center" }}>{code}</td>
+                                                <td className="cell-text">
+                                                  {t(`internal.bank.type.${code}`)}
+                                                </td>
+                                                <td style={{ textAlign: "right" }} className="cell-up">
+                                                  {fmt(v.plus)}
+                                                </td>
+                                                <td style={{ textAlign: "right" }} className="cell-down">
+                                                  {fmt(v.minus)}
+                                                </td>
+                                              </tr>
+                                            );
+                                          })}
+                                        </tbody>
+                                        <tfoot>
+                                          <tr className="fm-bank-summary-total">
+                                            <td colSpan={2} style={{ textAlign: "right" }}>
+                                              <strong>{t("internal.bank.summary.total")}</strong>
+                                            </td>
+                                            <td style={{ textAlign: "right" }}>
+                                              <strong>{fmt(totalPlus)}</strong>
+                                            </td>
+                                            <td style={{ textAlign: "right" }}>
+                                              <strong>{fmt(totalMinus)}</strong>
+                                            </td>
+                                          </tr>
+                                          <tr>
+                                            <td colSpan={2} style={{ textAlign: "right" }}>
+                                              {t("internal.bank.summary.balance")}
+                                            </td>
+                                            <td colSpan={2} style={{ textAlign: "right" }}>
+                                              <strong>
+                                                {fmt(balance)} {bank.currency}
+                                              </strong>
+                                            </td>
+                                          </tr>
+                                          <tr>
+                                            <td colSpan={2} style={{ textAlign: "right" }}>
+                                              {t("internal.bank.summary.pending")}
+                                            </td>
+                                            <td colSpan={2} style={{ textAlign: "right" }}>
+                                              <input
+                                                className="fm-bank-pending-input"
+                                                type="text"
+                                                inputMode="decimal"
+                                                placeholder="0.00"
+                                                value={bankPending[bank.accountNumber] ?? ""}
+                                                onChange={(event) =>
+                                                  setBankPending((current) => ({
+                                                    ...current,
+                                                    [bank.accountNumber]: event.target.value
+                                                  }))
+                                                }
+                                              />
+                                              <span className="fm-bank-pending-suffix">
+                                                {bank.currency}
+                                              </span>
+                                            </td>
+                                          </tr>
+                                        </tfoot>
+                                      </table>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+
                               <div className="fm-table-wrap">
                                 <table className="fm-table">
                                   <thead>
@@ -2688,31 +2911,54 @@ export default function App() {
                                       <th style={{ textAlign: "right" }}>{t("internal.bank.colCredit")}</th>
                                       <th style={{ textAlign: "right" }}>{t("internal.bank.colEnd")}</th>
                                       <th>{t("internal.bank.colCounterpart")}</th>
+                                      <th>{t("internal.bank.colType")}</th>
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {txns.slice(0, 25).map((tx, idx) => (
-                                      <tr key={`${bank.accountNumber}-${idx}-${tx.date}`}>
-                                        <td>{(tx.date ?? "").slice(0, 10)}</td>
-                                        <td className="cell-text">{tx.description ?? "—"}</td>
-                                        <td style={{ textAlign: "right" }} className="cell-down">
-                                          {tx.debit
-                                            ? tx.debit.toLocaleString("en-US", { maximumFractionDigits: 2 })
-                                            : ""}
-                                        </td>
-                                        <td style={{ textAlign: "right" }} className="cell-up">
-                                          {tx.credit
-                                            ? tx.credit.toLocaleString("en-US", { maximumFractionDigits: 2 })
-                                            : ""}
-                                        </td>
-                                        <td style={{ textAlign: "right" }}>
-                                          {(tx.endingBalance ?? 0).toLocaleString("en-US", {
-                                            maximumFractionDigits: 2
-                                          })}
-                                        </td>
-                                        <td>{tx.counterpartAccount ?? "—"}</td>
-                                      </tr>
-                                    ))}
+                                    {txns.slice(0, 25).map((tx, idx) => {
+                                      const txKey = `${bank.accountNumber}-${idx}-${tx.date}`;
+                                      return (
+                                        <tr key={txKey}>
+                                          <td>{(tx.date ?? "").slice(0, 10)}</td>
+                                          <td className="cell-text">{tx.description ?? "—"}</td>
+                                          <td style={{ textAlign: "right" }} className="cell-down">
+                                            {tx.debit
+                                              ? tx.debit.toLocaleString("en-US", { maximumFractionDigits: 2 })
+                                              : ""}
+                                          </td>
+                                          <td style={{ textAlign: "right" }} className="cell-up">
+                                            {tx.credit
+                                              ? tx.credit.toLocaleString("en-US", { maximumFractionDigits: 2 })
+                                              : ""}
+                                          </td>
+                                          <td style={{ textAlign: "right" }}>
+                                            {(tx.endingBalance ?? 0).toLocaleString("en-US", {
+                                              maximumFractionDigits: 2
+                                            })}
+                                          </td>
+                                          <td>{tx.counterpartAccount ?? "—"}</td>
+                                          <td>
+                                            <select
+                                              className="fm-bank-type-select"
+                                              value={bankTxnTypes[txKey] ?? ""}
+                                              onChange={(event) =>
+                                                setBankTxnTypes((current) => ({
+                                                  ...current,
+                                                  [txKey]: event.target.value
+                                                }))
+                                              }
+                                            >
+                                              <option value="">{t("internal.bank.typePlaceholder")}</option>
+                                              {typeOptions.map((opt) => (
+                                                <option key={opt.value} value={opt.value}>
+                                                  {opt.label}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
                                   </tbody>
                                 </table>
                               </div>
@@ -2723,7 +2969,7 @@ export default function App() {
                               ) : null}
                             </section>
                           );
-                        })}
+                        })() : null}
                       </>
                     );
                   })()}
@@ -2831,14 +3077,6 @@ export default function App() {
                   <div className="fm-segment">
                     <button
                       type="button"
-                      className={`fm-segment-btn ${usersSegment === "workers" ? "active" : ""}`}
-                      onClick={() => setUsersSegment("workers")}
-                    >
-                      {t("internal.users.segWorkers")}
-                      <span className="fm-segment-count">{fundManagersDirectory.length}</span>
-                    </button>
-                    <button
-                      type="button"
                       className={`fm-segment-btn ${usersSegment === "investors" ? "active" : ""}`}
                       onClick={() => setUsersSegment("investors")}
                     >
@@ -2850,6 +3088,14 @@ export default function App() {
                           )
                         ).size}
                       </span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`fm-segment-btn ${usersSegment === "workers" ? "active" : ""}`}
+                      onClick={() => setUsersSegment("workers")}
+                    >
+                      {t("internal.users.segWorkers")}
+                      <span className="fm-segment-count">{fundManagersDirectory.length}</span>
                     </button>
                   </div>
 
