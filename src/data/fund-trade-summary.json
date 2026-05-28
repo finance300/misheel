@@ -1,0 +1,695 @@
+[
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "OSCR",
+    "buy": 1697.0,
+    "sell": 1697.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "HIMS",
+    "buy": 447.0,
+    "sell": 447.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "DIA",
+    "buy": 45.0,
+    "sell": 45.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "CDE",
+    "buy": 4630.0,
+    "sell": 4630.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "TSLA",
+    "buy": 73.0,
+    "sell": 73.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "DVN",
+    "buy": 1075.0,
+    "sell": 1075.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "VAL",
+    "buy": 160.0,
+    "sell": 160.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "GLD",
+    "buy": 203.0,
+    "sell": 203.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "MNT",
+    "ticker": "KHAN",
+    "buy": 201045.0,
+    "sell": 159895.0,
+    "total": 41150.0,
+    "totalAfterSplit": 41150.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "JD",
+    "buy": 425.0,
+    "sell": 425.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "UNH",
+    "buy": 45.0,
+    "sell": 45.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "DUOL",
+    "buy": 17.0,
+    "sell": 17.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "AUD",
+    "ticker": "MAT",
+    "buy": 915343.0,
+    "sell": 829929.0,
+    "total": 85414.0,
+    "totalAfterSplit": 85414.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "IONZ",
+    "buy": 4964.0,
+    "sell": 4964.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "PDD",
+    "buy": 18.0,
+    "sell": 18.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "XPEV",
+    "buy": 119.0,
+    "sell": 119.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "NVO",
+    "buy": 576.0,
+    "sell": 576.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "ORLA",
+    "buy": 9134.0,
+    "sell": 9134.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Option",
+    "currency": "USD",
+    "ticker": "SHY 16JAN26 85 C",
+    "buy": 1000.0,
+    "sell": 1000.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "OXY",
+    "buy": 428.0,
+    "sell": 428.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "QS",
+    "buy": 192.0,
+    "sell": 192.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Option",
+    "currency": "USD",
+    "ticker": "ORLA 17APR26 15 C",
+    "buy": 104.0,
+    "sell": 104.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Option",
+    "currency": "USD",
+    "ticker": "SHY 21JAN28 85 C",
+    "buy": 90.0,
+    "sell": 0.0,
+    "total": 90.0,
+    "totalAfterSplit": 90.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "MSTZ",
+    "buy": 6900.0,
+    "sell": 4920.0,
+    "total": 1980.0,
+    "totalAfterSplit": 1980.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "BCI",
+    "buy": 12190.0,
+    "sell": 5395.0,
+    "total": 6795.0,
+    "totalAfterSplit": 6795.0
+  },
+  {
+    "type": "Stock",
+    "currency": "CAD",
+    "ticker": "TAL",
+    "buy": 66780.0,
+    "sell": 66780.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "CAD",
+    "ticker": "VLE",
+    "buy": 6029.0,
+    "sell": 6029.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "ADBE",
+    "buy": 29.0,
+    "sell": 29.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "ERO",
+    "buy": 1479.0,
+    "sell": 1479.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "NOV",
+    "buy": 805.0,
+    "sell": 805.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "AUD",
+    "ticker": "WWI",
+    "buy": 715563.0,
+    "sell": 501685.0,
+    "total": 213878.0,
+    "totalAfterSplit": 21387.8
+  },
+  {
+    "type": "Stock",
+    "currency": "CAD",
+    "ticker": "TSX: ERO",
+    "buy": 407.0,
+    "sell": 407.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "EUO",
+    "buy": 2094.0,
+    "sell": 2094.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "CAD",
+    "ticker": "IFOS",
+    "buy": 4590.0,
+    "sell": 4590.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "TLT",
+    "buy": 548.0,
+    "sell": 548.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "AUD",
+    "ticker": "ASX: EQR",
+    "buy": 676925.0,
+    "sell": 655529.0,
+    "total": 21396.0,
+    "totalAfterSplit": 21396.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "QBTZ",
+    "buy": 101.0,
+    "sell": 101.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "RGTZ",
+    "buy": 465.0,
+    "sell": 465.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "EQR",
+    "buy": 81.0,
+    "sell": 81.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "AUD",
+    "ticker": "MEK",
+    "buy": 410502.0,
+    "sell": 358958.0,
+    "total": 51544.0,
+    "totalAfterSplit": 51544.0
+  },
+  {
+    "type": "Option",
+    "currency": "USD",
+    "ticker": "CDE 15JAN27 35 C",
+    "buy": 11.0,
+    "sell": 11.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Option",
+    "currency": "USD",
+    "ticker": "CDE 18JUN26 22.5 C",
+    "buy": 12.0,
+    "sell": 12.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "UGL",
+    "buy": 4161.0,
+    "sell": 3531.0,
+    "total": 630.0,
+    "totalAfterSplit": 630.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "MU",
+    "buy": 693.0,
+    "sell": 650.0,
+    "total": 43.0,
+    "totalAfterSplit": 43.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "NVDA",
+    "buy": 471.0,
+    "sell": 471.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "AGQ",
+    "buy": 59.0,
+    "sell": 59.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "BABA",
+    "buy": 139.0,
+    "sell": 0.0,
+    "total": 139.0,
+    "totalAfterSplit": 139.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "BIDU",
+    "buy": 159.0,
+    "sell": 82.0,
+    "total": 77.0,
+    "totalAfterSplit": 77.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "TCEHY",
+    "buy": 300.0,
+    "sell": 152.0,
+    "total": 148.0,
+    "totalAfterSplit": 148.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "LODE",
+    "buy": 11286.0,
+    "sell": 3279.0,
+    "total": 8007.0,
+    "totalAfterSplit": 8007.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "XOM",
+    "buy": 146.0,
+    "sell": 146.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "BITI",
+    "buy": 4118.0,
+    "sell": 4118.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "HKD",
+    "ticker": "975.0",
+    "buy": 30000.0,
+    "sell": 30000.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "XLE",
+    "buy": 2032.0,
+    "sell": 1965.0,
+    "total": 67.0,
+    "totalAfterSplit": 67.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "ORCL",
+    "buy": 188.0,
+    "sell": 188.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "AMZN",
+    "buy": 118.0,
+    "sell": 118.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "TUA",
+    "buy": 4543.0,
+    "sell": 4543.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "TYD",
+    "buy": 1905.0,
+    "sell": 1905.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Option",
+    "currency": "USD",
+    "ticker": "TUA 18SEP26 19 C",
+    "buy": 27.0,
+    "sell": 0.0,
+    "total": 27.0,
+    "totalAfterSplit": 27.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "XLU",
+    "buy": 421.0,
+    "sell": 421.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Option",
+    "currency": "USD",
+    "ticker": "CORN 21AUG26 25 C",
+    "buy": 85.0,
+    "sell": 0.0,
+    "total": 85.0,
+    "totalAfterSplit": 85.0
+  },
+  {
+    "type": "Option",
+    "currency": "USD",
+    "ticker": "WEAT 15JAN27 35 C",
+    "buy": 42.0,
+    "sell": 0.0,
+    "total": 42.0,
+    "totalAfterSplit": 42.0
+  },
+  {
+    "type": "Option",
+    "currency": "USD",
+    "ticker": "FXE 18SEP26 100 P",
+    "buy": 100.0,
+    "sell": 0.0,
+    "total": 100.0,
+    "totalAfterSplit": 100.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "TAGS",
+    "buy": 2784.0,
+    "sell": 0.0,
+    "total": 2784.0,
+    "totalAfterSplit": 2784.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "UUP",
+    "buy": 2815.0,
+    "sell": 2815.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Stock",
+    "currency": "EUR",
+    "ticker": "DSB",
+    "buy": 3495.0,
+    "sell": 3495.0,
+    "total": 0.0,
+    "totalAfterSplit": 0.0
+  },
+  {
+    "type": "Option",
+    "currency": "USD",
+    "ticker": "MAGS 15JAN27 50 P",
+    "buy": 17.0,
+    "sell": 0.0,
+    "total": 17.0,
+    "totalAfterSplit": 17.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "SEU3",
+    "buy": 5442.0,
+    "sell": 1223.0,
+    "total": 4219.0,
+    "totalAfterSplit": 4219.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "MOMO",
+    "buy": 3852.0,
+    "sell": 0.0,
+    "total": 3852.0,
+    "totalAfterSplit": 3852.0
+  },
+  {
+    "type": "Stock",
+    "currency": "AUD",
+    "ticker": "CCV",
+    "buy": 126724.0,
+    "sell": 0.0,
+    "total": 126724.0,
+    "totalAfterSplit": 126724.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "ARM",
+    "buy": 102.0,
+    "sell": 43.0,
+    "total": 59.0,
+    "totalAfterSplit": 59.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "DBB",
+    "buy": 2382.0,
+    "sell": 0.0,
+    "total": 2382.0,
+    "totalAfterSplit": 2382.0
+  },
+  {
+    "type": "Stock",
+    "currency": "CAD",
+    "ticker": "MAI",
+    "buy": 3212.0,
+    "sell": 0.0,
+    "total": 3212.0,
+    "totalAfterSplit": 3212.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "TRT",
+    "buy": 140.0,
+    "sell": 0.0,
+    "total": 140.0,
+    "totalAfterSplit": 140.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "SU",
+    "buy": 379.0,
+    "sell": 75.0,
+    "total": 304.0,
+    "totalAfterSplit": 304.0
+  },
+  {
+    "type": "Stock",
+    "currency": "EUR",
+    "ticker": "EUS5",
+    "buy": 724.0,
+    "sell": 0.0,
+    "total": 724.0,
+    "totalAfterSplit": 724.0
+  },
+  {
+    "type": "Stock",
+    "currency": "USD",
+    "ticker": "ADEA",
+    "buy": 786.0,
+    "sell": 0.0,
+    "total": 786.0,
+    "totalAfterSplit": 786.0
+  }
+]

@@ -8,8 +8,8 @@ coverage/
 .vscode/
 .idea/
 
-# Real fund data — workbook + extracted JSON contain investor PII and bank
-# account history. Keep them local only. Anyone cloning regenerates JSON by
-# running `python3 scripts/extract-fund-data.py` against their own workbook.
+# Source workbook stays local — JSON is regenerated from it via
+# `python3 scripts/extract-fund-data.py`. Extracted JSON in src/data/ IS
+# committed so Vercel builds can import it; protect the deployment with
+# Vercel's password / SSO protection since the JSON contains investor PII.
 *.xlsx
-src/data/*.json
