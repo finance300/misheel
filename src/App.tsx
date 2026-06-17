@@ -1,5 +1,15 @@
-import { type FormEvent, type ReactElement, useMemo, useRef, useState } from "react";
+import { type FormEvent, type ReactElement, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
+import ReportsAdmin from "./components/ReportsAdmin";
+import { isSupabaseConfigured } from "./lib/supabase";
+import { type Quote, fetchQuotes, isMarketConfigured } from "./lib/market";
+import {
+  REPORT_GROUPS,
+  type ReportGroupKey,
+  type ReportRecord,
+  listReports,
+  reportFileUrl
+} from "./lib/reports";
 import { fundCalc, fundInputs } from "./data/fund-calc";
 import fundTrades from "./data/fund-trades.json";
 import fundBanks from "./data/fund-banks.json";
@@ -7,7 +17,7 @@ import fundInvestorSubscriptions from "./data/fund-investor-subscriptions.json";
 import fundTradeSummary from "./data/fund-trade-summary.json";
 
 type Lang = "mn" | "en";
-type Role = "board_member" | "fund_manager";
+type Role = "board_member" | "fund_manager" | "general_admin";
 type FundManagerTab =
   | "nav"
   | "portfolio"
@@ -15,6 +25,7 @@ type FundManagerTab =
   | "bank"
   | "new_trades"
   | "users"
+  | "reports"
   | "settings";
 
 type InvestorSubscription = {
@@ -113,10 +124,11 @@ const translations: Record<Lang, TranslationMap> = {
   mn: {
     "brand.sub": "Улаанбаатар Ассет Менежмент",
     "nav.home": "Эхлэл",
-    "nav.about": "Бидний тухай",
+    "nav.about": "Бидны зорилго",
     "nav.strategy": "Стратеги",
-    "nav.team": "Баг",
-    "nav.timeline": "Он цаг",
+    "nav.team": "Баг хамт олон",
+    "nav.timeline": "Түүхэн замнал",
+    "nav.financials": "Тайлан & Журам",
     "nav.contact": "Холбоо барих",
     "auth.login": "Нэвтрэх",
     "hero.kicker": "Investment Management",
@@ -145,12 +157,16 @@ const translations: Record<Lang, TranslationMap> = {
     "contact.company": "Улаанбаатар Ассет Менежмент ҮЦК ХХК",
     "contact.address":
       "Улаанбаатар хот, Сүхбаатар дүүрэг, 1-р хороо, Чингисийн өргөн чөлөө - 24, Парк Плэйс барилга, 4 давхар, 401 тоот",
-    "footer.copy": "© 2026 Улаанбаатар Ассет Менежмент ҮЦК ХХК. Бүх эрх хуулиар хамгаалагдсан.",
+    "footer.copy": "© 2026 Улаанбаатар Ассет Менежмент ҮЦК ХХК.",
     "login.title": "Дотоод системд нэвтрэх",
     "login.desc": "Нэвтрэх эрхээ сонгоно уу.",
     "login.cancel": "Буцах",
     "role.board": "ТУЗ Гишүүн",
     "role.fund": "Сангийн Менежер",
+    "role.admin": "Ерөнхий админ",
+    "role.boardDesc": "Санал хураалт, баталгаажуулалт",
+    "role.fundDesc": "Багц, NAV, арилжаа удирдах",
+    "role.adminDesc": "Системийн бүрэн хандалт",
     "internal.brand": "Дотоод Систем",
     "internal.back": "Нүүр сайт руу буцах",
     "internal.selected": "Сонгосон эрх",
@@ -175,6 +191,7 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.trades.inactiveStocks": "Идэвхгүй хувьцаа",
     "internal.trades.inactiveOptions": "Идэвхгүй опцион",
     "internal.fmTabs.users": "Хэрэглэгчид",
+    "internal.fmTabs.reports": "Тайлан & Журам",
     "internal.fmTabs.settings": "Тохиргоо",
     "internal.page.nav.title": "Цэвэр хөрөнгийн үнэлгээ",
     "internal.page.nav.subtitle": "Сангийн NAV болон гол үзүүлэлтүүдийг хянана.",
@@ -412,10 +429,11 @@ const translations: Record<Lang, TranslationMap> = {
   en: {
     "brand.sub": "Ulaanbaatar Asset Management",
     "nav.home": "Home",
-    "nav.about": "About",
+    "nav.about": "Our Mission",
     "nav.strategy": "Strategy",
-    "nav.team": "Team",
-    "nav.timeline": "Timeline",
+    "nav.team": "Our Team",
+    "nav.timeline": "History",
+    "nav.financials": "Reports & Regulations",
     "nav.contact": "Contact",
     "auth.login": "Log in",
     "hero.kicker": "Investment Management",
@@ -443,12 +461,16 @@ const translations: Record<Lang, TranslationMap> = {
     "contact.title": "Contact us",
     "contact.company": "Ulaanbaatar Asset Management LLC",
     "contact.address": "Suite #401, Park Place office, 1st khoroo, Sukhbaatar district, Ulaanbaatar, Mongolia",
-    "footer.copy": "© 2026 Ulaanbaatar Asset Management LLC. All rights reserved.",
+    "footer.copy": "© 2026 Ulaanbaatar Asset Management LLC.",
     "login.title": "Internal portal login",
     "login.desc": "Select your role to continue.",
     "login.cancel": "Cancel",
     "role.board": "Board Member",
     "role.fund": "Fund Manager",
+    "role.admin": "General Admin",
+    "role.boardDesc": "Voting and approvals",
+    "role.fundDesc": "Manage portfolio, NAV, trades",
+    "role.adminDesc": "Full system access",
     "internal.brand": "Internal Portal",
     "internal.back": "Back to website",
     "internal.selected": "Selected role",
@@ -473,6 +495,7 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.trades.inactiveStocks": "Closed stocks",
     "internal.trades.inactiveOptions": "Closed options",
     "internal.fmTabs.users": "Users",
+    "internal.fmTabs.reports": "Reports & Regulations",
     "internal.fmTabs.settings": "Settings",
     "internal.page.nav.title": "Net Asset Value",
     "internal.page.nav.subtitle": "Track the fund's NAV and key performance indicators.",
@@ -711,21 +734,44 @@ const translations: Record<Lang, TranslationMap> = {
 const teamData: Record<Lang, Array<{ name: string; role: string }>> = {
   mn: [
     { name: "Лакшми Боожоо", role: "ТУЗ-ийн дарга" },
-    { name: "Монсор Нямдаваа", role: "ТУЗ-ийн гишүүн" },
+    { name: "Монсор Нямдаваа", role: "Гүйцэтгэх захирал, ТУЗ-ийн гишүүн" },
     { name: "Оймандах Жамъянсүрэн", role: "ТУЗ-ийн гишүүн" },
     { name: "Уянга Алтан-Эрдэнэ", role: "Хөрөнгө оруулалтын сангийн зөвлөх" },
-    { name: "Идэрбат Ариуна", role: "Хөрөнгө оруулалтын сангийн зөвлөх" },
-    { name: "НЭР Нэр", role: "Гүйцэтгэх захирал" }
+    { name: "Идэрбат Ариуна", role: "Хөрөнгө оруулалтын сангийн зөвлөх" }
   ],
   en: [
     { name: "Lakshmi Boojoo", role: "Chair" },
-    { name: "Monsor Nyamdavaa", role: "Director" },
+    { name: "Monsor Nyamdavaa", role: "CEO, Director" },
     { name: "Oimandakh Jamiyansuren", role: "Director" },
     { name: "Uyanga Altan-Erdene", role: "Fund Manager" },
-    { name: "Iderbat Ariuna", role: "Fund Manager" },
-    { name: "Name Name", role: "CEO" }
+    { name: "Iderbat Ariuna", role: "Fund Manager" }
   ]
 };
+
+// Team photos, by position (same order as teamData). Drop files into public/assets/team/.
+const teamPhotos: string[] = [
+  "/assets/team/lakshmi.png",
+  "/assets/team/monsor.png",
+  "/assets/team/oimandah.jpg",
+  "/assets/team/uyanga.png",
+  "/assets/team/iderbat.png"
+];
+
+function MemberAvatar({ name, photo }: { name: string; photo?: string }) {
+  const [failed, setFailed] = useState(false);
+  if (photo && !failed) {
+    return (
+      <img
+        className="member-avatar member-avatar-photo"
+        src={photo}
+        alt={name}
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return <div className="member-avatar">{initials(name)}</div>;
+}
 
 const timelineData: Record<Lang, Array<{ year: string; text: string }>> = {
   mn: [
@@ -743,6 +789,63 @@ const timelineData: Record<Lang, Array<{ year: string; text: string }>> = {
     { year: "2016", text: "Adopted ESG values as one of the core principles of the company." },
     { year: "2016", text: "First real estate fund management." },
     { year: "2018", text: "Listed equity fund established." }
+  ]
+};
+
+// Localized titles for the three report groups (keys match the Supabase group_key).
+const reportGroupTitles: Record<Lang, Record<ReportGroupKey, string>> = {
+  mn: { activity: "Үйл ажиллагааны тайлан", audit: "Аудитын тайлан", regulations: "Журам" },
+  en: { activity: "Operational report", audit: "Audit report", regulations: "Regulations" }
+};
+
+// Placeholder documents shown when Supabase is not yet configured / empty.
+type ReportDoc = { name: string; href: string };
+const reportGroups: Record<Lang, Array<{ title: string; items: ReportDoc[] }>> = {
+  mn: [
+    {
+      title: "Үйл ажиллагааны тайлан",
+      items: [
+        { name: "2025 оны үйл ажиллагааны тайлан", href: "/assets/reports/2025-activity.pdf" },
+        { name: "2024 оны үйл ажиллагааны тайлан", href: "/assets/reports/2024-activity.pdf" }
+      ]
+    },
+    {
+      title: "Аудитын тайлан",
+      items: [
+        { name: "2025 оны аудитын тайлан", href: "/assets/reports/2025-audit.pdf" },
+        { name: "2024 оны аудитын тайлан", href: "/assets/reports/2024-audit.pdf" }
+      ]
+    },
+    {
+      title: "Журам",
+      items: [
+        { name: "Хөрөнгө оруулалтын сангийн дотоод журам", href: "/assets/reports/fund-rules.pdf" },
+        { name: "Эрсдэлийн удирдлагын журам", href: "/assets/reports/risk-policy.pdf" }
+      ]
+    }
+  ],
+  en: [
+    {
+      title: "Operational report",
+      items: [
+        { name: "2025 operational report", href: "/assets/reports/2025-activity.pdf" },
+        { name: "2024 operational report", href: "/assets/reports/2024-activity.pdf" }
+      ]
+    },
+    {
+      title: "Audit report",
+      items: [
+        { name: "2025 audit report", href: "/assets/reports/2025-audit.pdf" },
+        { name: "2024 audit report", href: "/assets/reports/2024-audit.pdf" }
+      ]
+    },
+    {
+      title: "Regulations",
+      items: [
+        { name: "Fund internal regulations", href: "/assets/reports/fund-rules.pdf" },
+        { name: "Risk management policy", href: "/assets/reports/risk-policy.pdf" }
+      ]
+    }
   ]
 };
 
@@ -826,7 +929,9 @@ function isInternalPath() {
 function readRoleFromQuery(): Role {
   const params = new URLSearchParams(window.location.search);
   const role = params.get("role");
-  return role === "fund_manager" ? "fund_manager" : "board_member";
+  if (role === "fund_manager") return "fund_manager";
+  if (role === "general_admin") return "general_admin";
+  return "board_member";
 }
 
 function initials(name: string) {
@@ -1067,6 +1172,15 @@ function tabIcon(id: FundManagerTab): ReactElement {
           <path d="M15.5 13.4a5 5 0 0 1 5.5 4.6" />
         </svg>
       );
+    case "reports":
+      return (
+        <svg {...common} aria-hidden="true">
+          <path d="M14 3v5h5" />
+          <path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+          <path d="M9 13h6" />
+          <path d="M9 17h4" />
+        </svg>
+      );
     case "settings":
     default:
       return (
@@ -1089,7 +1203,90 @@ export default function App() {
   const [lang, setLang] = useState<Lang>(initialLang === "en" ? "en" : "mn");
   const [role] = useState<Role>(initialRole);
   const [loginOpen, setLoginOpen] = useState(false);
-  const [activeFundTab, setActiveFundTab] = useState<FundManagerTab>("nav");
+  const [pendingRole, setPendingRole] = useState<Role | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<ReportDoc | null>(null);
+  const [liveQuotes, setLiveQuotes] = useState<Quote[] | null>(null);
+  useEffect(() => {
+    if (!isMarketConfigured) return;
+    let active = true;
+    const load = () =>
+      fetchQuotes()
+        .then((q) => {
+          if (active && q.length) setLiveQuotes(q);
+        })
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 20000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, []);
+  const tickerItems: Quote[] =
+    liveQuotes ?? marketIndexes.map((m) => ({ label: m.name, value: m.value, change: m.change }));
+  const sideNavSections = [
+    { id: "hero", key: "nav.home" },
+    { id: "about", key: "nav.about" },
+    { id: "team", key: "nav.team" },
+    { id: "timeline", key: "nav.timeline" },
+    { id: "financials", key: "nav.financials" },
+    { id: "contact", key: "nav.contact" }
+  ];
+  const [activeSection, setActiveSection] = useState("hero");
+  useEffect(() => {
+    if (initialInternal) return;
+    const ids = ["hero", "about", "team", "timeline", "financials", "contact"];
+    let frame = 0;
+    // Active = whichever section occupies the most of the viewport right now.
+    const update = () => {
+      const vh = window.innerHeight;
+      let best = ids[0];
+      let bestVisible = -1;
+      for (const id of ids) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        const visible = Math.min(r.bottom, vh) - Math.max(r.top, 0);
+        if (visible > bestVisible) {
+          bestVisible = visible;
+          best = id;
+        }
+      }
+      setActiveSection(best);
+    };
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [initialInternal]);
+  const [liveReports, setLiveReports] = useState<ReportRecord[] | null>(null);
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    listReports()
+      .then(setLiveReports)
+      .catch(() => setLiveReports(null));
+  }, []);
+  // Show live documents from Supabase when available; otherwise the built-in placeholders.
+  const displayReportGroups =
+    liveReports && liveReports.length > 0
+      ? REPORT_GROUPS.map((key) => ({
+          title: reportGroupTitles[lang][key],
+          items: liveReports
+            .filter((r) => r.group_key === key)
+            .map((r) => ({ name: r.title, href: reportFileUrl(r.file_path) }))
+        })).filter((g) => g.items.length > 0)
+      : reportGroups[lang];
+  const [activeFundTab, setActiveFundTab] = useState<FundManagerTab>(
+    initialRole === "general_admin" ? "reports" : "nav"
+  );
   const [tradeEntryOpen, setTradeEntryOpen] = useState(false);
   const [proposals, setProposals] = useState<Proposal[]>(initialProposals);
   const [tradeConfirmations, setTradeConfirmations] = useState<TradeConfirmation[]>(initialTradeConfirmations);
@@ -1480,20 +1677,63 @@ export default function App() {
   });
 
   const t = (key: string) => translations[lang][key] ?? key;
-  const fundManagerTabs: Array<{ id: FundManagerTab; label: string; icon: ReactElement }> = [
-    { id: "nav", label: t("internal.fmTabs.nav"), icon: tabIcon("nav") },
-    { id: "portfolio", label: t("internal.fmTabs.portfolio"), icon: tabIcon("portfolio") },
-    { id: "trades", label: t("internal.fmTabs.trades"), icon: tabIcon("trades") },
-    { id: "bank", label: t("internal.fmTabs.bank"), icon: tabIcon("bank") },
-    { id: "new_trades", label: t("internal.fmTabs.newTrades"), icon: tabIcon("new_trades") },
-    { id: "users", label: t("internal.fmTabs.users"), icon: tabIcon("users") },
-    { id: "settings", label: t("internal.fmTabs.settings"), icon: tabIcon("settings") }
-  ];
+  const fundManagerTabs: Array<{ id: FundManagerTab; label: string; icon: ReactElement }> =
+    role === "general_admin"
+      ? [{ id: "reports", label: t("internal.fmTabs.reports"), icon: tabIcon("reports") }]
+      : [
+          { id: "nav", label: t("internal.fmTabs.nav"), icon: tabIcon("nav") },
+          { id: "portfolio", label: t("internal.fmTabs.portfolio"), icon: tabIcon("portfolio") },
+          { id: "trades", label: t("internal.fmTabs.trades"), icon: tabIcon("trades") },
+          { id: "bank", label: t("internal.fmTabs.bank"), icon: tabIcon("bank") },
+          { id: "new_trades", label: t("internal.fmTabs.newTrades"), icon: tabIcon("new_trades") },
+          { id: "users", label: t("internal.fmTabs.users"), icon: tabIcon("users") },
+          { id: "settings", label: t("internal.fmTabs.settings"), icon: tabIcon("settings") }
+        ];
   const aboutCards = [
     { title: t("about.visionTitle"), body: t("about.visionBody") },
     { title: t("about.missionTitle"), body: t("about.missionBody") },
     { title: t("about.valuesTitle"), body: t("about.valuesBody") }
   ];
+  // Triple the cards so a previous and next slide always exist (infinite loop).
+  const aboutCount = aboutCards.length;
+  const aboutLoopCards = [...aboutCards, ...aboutCards, ...aboutCards];
+  const [aboutPos, setAboutPos] = useState(aboutCount);
+  const [aboutAnimate, setAboutAnimate] = useState(true);
+  const aboutActive = ((aboutPos % aboutCount) + aboutCount) % aboutCount;
+  const aboutViewportRef = useRef<HTMLDivElement | null>(null);
+  const aboutTrackRef = useRef<HTMLDivElement | null>(null);
+  const [aboutViewportWidth, setAboutViewportWidth] = useState(0);
+  const [aboutTrackX, setAboutTrackX] = useState(0);
+  useEffect(() => {
+    const el = aboutViewportRef.current;
+    if (!el) return;
+    const update = () => setAboutViewportWidth(el.clientWidth);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+  useEffect(() => {
+    const id = setInterval(() => setAboutPos((p) => p + 1), 5000);
+    return () => clearInterval(id);
+  }, []);
+  // Card takes half the viewport so each neighbour shows half of itself on the sides.
+  const aboutCardFraction = aboutViewportWidth > 0 && aboutViewportWidth < 700 ? 0.78 : 0.5;
+  const aboutCardPx = aboutViewportWidth * aboutCardFraction;
+  // Center the active card from its real measured position so it always lands dead-center.
+  useEffect(() => {
+    const viewport = aboutViewportRef.current;
+    const track = aboutTrackRef.current;
+    if (!viewport || !track) return;
+    const active = track.children[aboutPos] as HTMLElement | undefined;
+    if (!active) return;
+    setAboutTrackX(viewport.clientWidth / 2 - (active.offsetLeft + active.offsetWidth / 2));
+  }, [aboutPos, aboutViewportWidth, aboutCardPx]);
+  // After sliding into a cloned edge, jump back to the middle copy without animating.
+  useEffect(() => {
+    if (aboutAnimate) return;
+    const id = requestAnimationFrame(() => setAboutAnimate(true));
+    return () => cancelAnimationFrame(id);
+  }, [aboutAnimate]);
 
   const onToggleLang = () => {
     const next = lang === "mn" ? "en" : "mn";
@@ -1501,9 +1741,39 @@ export default function App() {
     localStorage.setItem("lang", next);
   };
 
-  const toInternal = (selectedRole: Role) => {
-    window.location.href = `/internal?role=${selectedRole}&lang=${lang}`;
+  const toInternal = (selectedRole: Role, fund?: string) => {
+    const fundParam = fund ? `&fund=${fund}` : "";
+    window.location.href = `/internal?role=${selectedRole}&lang=${lang}${fundParam}`;
   };
+  // Funds the user can manage. Today there's just one (Misheel); the picker scales to more.
+  const funds = [{ id: "misheel", name: lang === "mn" ? "Мишээл сан" : "Misheel Fund" }];
+  const chooseRole = (selectedRole: Role) => {
+    // The general admin manages reports, not a specific fund — skip fund selection.
+    if (selectedRole === "general_admin") {
+      toInternal(selectedRole);
+    } else {
+      setPendingRole(selectedRole);
+    }
+  };
+  const closeLogin = () => {
+    setLoginOpen(false);
+    setPendingRole(null);
+  };
+
+  const [activeMilestone, setActiveMilestone] = useState(0);
+  const combinedTimeline = timelineData[lang];
+  const activeEntry = combinedTimeline[Math.min(activeMilestone, combinedTimeline.length - 1)];
+  const goMilestone = (next: number) => {
+    const len = combinedTimeline.length;
+    setActiveMilestone(((next % len) + len) % len);
+  };
+  // Auto-advance the active year; loops within the timeline.
+  useEffect(() => {
+    const id = setInterval(() => {
+      setActiveMilestone((m) => (m + 1) % combinedTimeline.length);
+    }, 4500);
+    return () => clearInterval(id);
+  }, [combinedTimeline.length]);
 
   const currentSettleDate = calculateSettleDate(tradeForm.tradeDate, tradeForm.settlementLag);
 
@@ -1615,9 +1885,10 @@ export default function App() {
   };
 
   if (initialInternal) {
-    const selectedRoleLabel = role === "fund_manager" ? t("role.fund") : t("role.board");
+    const selectedRoleLabel =
+      role === "fund_manager" ? t("role.fund") : role === "general_admin" ? t("role.admin") : t("role.board");
 
-    if (role === "fund_manager") {
+    if (role === "fund_manager" || role === "general_admin") {
       const currentUser = fundManagersDirectory[1];
       const activeUsers = fundManagersDirectory.filter((u) => u.status === "active").length;
       const invitedUsers = fundManagersDirectory.filter((u) => u.status === "invited").length;
@@ -1669,13 +1940,15 @@ export default function App() {
             </nav>
 
             <div className="fm-sidebar-footer">
-              <div className="fm-sidebar-user">
-                <div className="fm-sidebar-avatar">{initials(currentUser.name)}</div>
-                <div className="fm-sidebar-user-meta">
-                  <p className="fm-sidebar-user-name">{currentUser.name}</p>
-                  <p className="fm-sidebar-user-email">{currentUser.email}</p>
+              {role !== "general_admin" ? (
+                <div className="fm-sidebar-user">
+                  <div className="fm-sidebar-avatar">{initials(currentUser.name)}</div>
+                  <div className="fm-sidebar-user-meta">
+                    <p className="fm-sidebar-user-name">{currentUser.name}</p>
+                    <p className="fm-sidebar-user-email">{currentUser.email}</p>
+                  </div>
                 </div>
-              </div>
+              ) : null}
               <div className="fm-sidebar-actions">
                 <button
                   type="button"
@@ -1701,7 +1974,7 @@ export default function App() {
                 </h1>
               </div>
               <div className="fm-topbar-role">
-                <span className="fm-topbar-role-label">{t("role.fund")}</span>
+                <span className="fm-topbar-role-label">{selectedRoleLabel}</span>
               </div>
             </header>
 
@@ -3460,6 +3733,8 @@ export default function App() {
                   </section>
                 </div>
               ) : null}
+
+              {activeFundTab === "reports" ? <ReportsAdmin lang={lang} /> : null}
             </main>
           </div>
 
@@ -3817,11 +4092,16 @@ export default function App() {
           <a className="brand" href="#home">
             <img src="/assets/ubam-logo.png" alt="UB Asset Management logo" />
             <div>
-              <p className="brand-name">Улаанбаатар Ассет Менежмент ҮЦК ХХК</p>
-              <p className="brand-sub">{t("brand.sub")}</p>
+              <p className="brand-name">Улаанбаатар Ассет Менежмент ХХК</p>
             </div>
           </a>
-          <div />
+
+          <nav className="main-nav">
+            <a href="#about">{t("nav.about")}</a>
+            <a href="#team">{t("nav.team")}</a>
+            <a href="#timeline">{t("nav.timeline")}</a>
+            <a href="#financials">{t("nav.financials")}</a>
+          </nav>
 
           <div className="header-actions">
             <button className="btn btn-ghost" type="button" onClick={onToggleLang}>
@@ -3838,9 +4118,9 @@ export default function App() {
         <div className="market-track">
           {[0, 1].map((group) => (
             <div className="market-group" key={`market-${group}`}>
-              {marketIndexes.map((item) => (
-                <article className="market-item" key={`${group}-${item.name}`}>
-                  <span className="market-name">{item.name}</span>
+              {tickerItems.map((item) => (
+                <article className="market-item" key={`${group}-${item.label}`}>
+                  <span className="market-name">{item.label}</span>
                   <span className="market-value">{item.value}</span>
                   <span className={`market-change ${item.change >= 0 ? "up" : "down"}`}>
                     {item.change >= 0 ? "+" : ""}
@@ -3853,33 +4133,76 @@ export default function App() {
         </div>
       </section>
 
+      <nav className="side-nav" aria-label="Section navigation">
+        {sideNavSections.map((s) => (
+          <a
+            key={s.id}
+            href={`#${s.id}`}
+            className={`side-nav-item${activeSection === s.id ? " active" : ""}`}
+          >
+            <span className="side-nav-label">{t(s.key)}</span>
+            <span className="side-nav-dot" aria-hidden="true" />
+          </a>
+        ))}
+      </nav>
+
       <main>
-        <section className="hero">
+        <section className="hero" id="hero">
           <div className="hero-overlay" />
           <div className="container hero-content">
-            <p className="hero-kicker">{t("hero.kicker")}</p>
             <h1>
-              UB
+              Улаанбаатар
               <br />
-              Asset Management
+              Ассет Менежмент ХХК
             </h1>
-            <p>{t("hero.body")}</p>
           </div>
         </section>
 
         <section className="section" id="about">
           <div className="container">
             <div className="about-carousel">
-              {aboutCards.map((card, index) => (
-                <article key={`${card.title}-${index}`} className="about-card">
-                    <h2>{card.title}</h2>
-                    <p>{card.body}</p>
-                </article>
-              ))}
-            </div>
-            <div className="experience-panel">
-              <h3>{t("about.glanceTitle")}</h3>
-              <p>{t("about.glanceBody")}</p>
+              <div className="about-viewport" ref={aboutViewportRef}>
+                <div
+                  className="about-track"
+                  ref={aboutTrackRef}
+                  style={{
+                    transform: `translateX(${aboutTrackX}px)`,
+                    transition: aboutAnimate ? undefined : "none"
+                  }}
+                  onTransitionEnd={(event) => {
+                    if (event.target !== aboutTrackRef.current || event.propertyName !== "transform") {
+                      return;
+                    }
+                    if (aboutPos < aboutCount || aboutPos >= aboutCount * 2) {
+                      setAboutAnimate(false);
+                      setAboutPos(aboutCount + aboutActive);
+                    }
+                  }}
+                >
+                  {aboutLoopCards.map((card, index) => (
+                    <article
+                      key={`${card.title}-${index}`}
+                      className={`about-card${index === aboutPos ? " is-active" : ""}`}
+                      style={{ width: aboutCardPx ? `${aboutCardPx}px` : undefined }}
+                      onClick={() => setAboutPos(index)}
+                    >
+                      <h2>{card.title}</h2>
+                      <p>{card.body}</p>
+                    </article>
+                  ))}
+                </div>
+              </div>
+              <div className="about-dots">
+                {aboutCards.map((card, index) => (
+                  <button
+                    key={`dot-${card.title}-${index}`}
+                    type="button"
+                    className={`about-dot${index === aboutActive ? " active" : ""}`}
+                    onClick={() => setAboutPos(aboutCount + index)}
+                    aria-label={card.title}
+                  />
+                ))}
+              </div>
             </div>
           </div>
         </section>
@@ -3888,9 +4211,9 @@ export default function App() {
           <div className="container">
             <h2 className="section-title">{t("team.title")}</h2>
             <div className="team-grid">
-              {teamData[lang].map((person) => (
+              {teamData[lang].map((person, index) => (
                 <article className="member-card" key={`${person.name}-${person.role}`}>
-                  <div className="member-avatar">{initials(person.name)}</div>
+                  <MemberAvatar name={person.name} photo={teamPhotos[index]} />
                   <p className="member-name">{person.name}</p>
                   <p className="member-role">{person.role}</p>
                 </article>
@@ -3901,58 +4224,104 @@ export default function App() {
 
         <section className="section section-soft" id="timeline">
           <div className="container">
-            <h2 className="section-title">{t("timeline.title")}</h2>
-            <div className="timeline-template">
-              <div className="timeline-template-inner">
-                <div className="timeline-band">
-                  {timelineData[lang].map((item, index) => (
-                    <span className={`timeline-segment shade-${(index % 6) + 1}`} key={`${item.year}-${index}`} />
-                  ))}
-                </div>
+            <div className="ht-head">
+              <h2 className="section-title">{t("timeline.title")}</h2>
+            </div>
 
-                <div className="timeline-columns">
-                  {timelineData[lang].map((item, index) => {
-                    const isTop = index % 2 === 0;
-                    return (
-                      <article className="timeline-column" key={`${item.year}-${item.text}`}>
-                        {isTop ? (
-                          <div className="timeline-card">
-                            <h3>{item.year}</h3>
-                            <p>{item.text}</p>
-                          </div>
-                        ) : (
-                          <div className="timeline-card-spacer" />
-                        )}
-
-                        <div className="timeline-mid">
-                          {isTop ? (
-                            <>
-                              <div className="timeline-badge">{item.year}</div>
-                              <div className="timeline-stick" />
-                              <div className="timeline-dot" />
-                            </>
-                          ) : (
-                            <>
-                              <div className="timeline-dot" />
-                              <div className="timeline-stick" />
-                              <div className="timeline-badge">{item.year}</div>
-                            </>
-                          )}
-                        </div>
-
-                        {!isTop ? (
-                          <div className="timeline-card">
-                            <h3>{item.year}</h3>
-                            <p>{item.text}</p>
-                          </div>
-                        ) : (
-                          <div className="timeline-card-spacer" />
-                        )}
-                      </article>
-                    );
-                  })}
-                </div>
+            <div className="ht-rail">
+              <button
+                className="ht-arrow"
+                type="button"
+                aria-label="Previous"
+                onClick={() => goMilestone(activeMilestone - 1)}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 6l-6 6 6 6" />
+                </svg>
+              </button>
+              <div className="ht-line">
+                {combinedTimeline.map((item, index) => (
+                  <button
+                    key={`ht-node-${item.year}-${index}`}
+                    type="button"
+                    className={`ht-node${index === activeMilestone ? " active" : ""}`}
+                    onClick={() => setActiveMilestone(index)}
+                  >
+                    <span className="ht-dot" />
+                    <span className="ht-year">{item.year}</span>
+                  </button>
+                ))}
               </div>
+              <button
+                className="ht-arrow"
+                type="button"
+                aria-label="Next"
+                onClick={() => goMilestone(activeMilestone + 1)}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="ht-panel" key={activeMilestone}>
+              <span className="ht-panel-year">{activeEntry.year}</span>
+              <p className="ht-panel-text">{activeEntry.text}</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="section" id="financials">
+          <div className="container">
+            <h2 className="section-title">{t("nav.financials")}</h2>
+            <div className="reports-grid">
+              {displayReportGroups.map((group, groupIndex) => (
+                <div className="report-group" key={`report-group-${groupIndex}`}>
+                  <h3 className="report-group-title">{group.title}</h3>
+                  <ul className="report-list">
+                    {group.items.map((item, itemIndex) => (
+                      <li key={`report-${groupIndex}-${itemIndex}`}>
+                        <div className="report-item">
+                          <span className="report-file" aria-hidden="true">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M14 3v5h5" />
+                              <path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+                            </svg>
+                          </span>
+                          <span className="report-name">{item.name}</span>
+                          <div className="report-actions">
+                            <button
+                              type="button"
+                              className="report-action"
+                              title={lang === "mn" ? "Урьдчилан үзэх" : "Preview"}
+                              aria-label={lang === "mn" ? "Урьдчилан үзэх" : "Preview"}
+                              onClick={() => setPreviewDoc(item)}
+                            >
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+                                <circle cx="12" cy="12" r="3" />
+                              </svg>
+                            </button>
+                            <a
+                              className="report-action"
+                              href={item.href}
+                              download
+                              title={lang === "mn" ? "Татах" : "Download"}
+                              aria-label={lang === "mn" ? "Татах" : "Download"}
+                            >
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 4v11" />
+                                <path d="M7 11l5 5 5-5" />
+                                <path d="M5 20h14" />
+                              </svg>
+                            </a>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </div>
           </div>
         </section>
@@ -3983,22 +4352,153 @@ export default function App() {
         </div>
       </footer>
 
-      {loginOpen ? (
-        <div className="modal" onClick={(event) => event.target === event.currentTarget && setLoginOpen(false)}>
-          <div className="modal-card">
-            <h3>{t("login.title")}</h3>
-            <p>{t("login.desc")}</p>
-            <div className="role-grid">
-              <button className="role-btn" type="button" onClick={() => toInternal("board_member")}>
-                {t("role.board")}
-              </button>
-              <button className="role-btn" type="button" onClick={() => toInternal("fund_manager")}>
-                {t("role.fund")}
-              </button>
+      {previewDoc ? (
+        <div
+          className="modal"
+          onClick={(event) => event.target === event.currentTarget && setPreviewDoc(null)}
+        >
+          <div className="preview-card">
+            <div className="preview-head">
+              <span className="preview-title">{previewDoc.name}</span>
+              <div className="preview-head-actions">
+                <a className="btn btn-ghost" href={previewDoc.href} download>
+                  {lang === "mn" ? "Татах" : "Download"}
+                </a>
+                <button className="preview-close" type="button" onClick={() => setPreviewDoc(null)} aria-label="Close">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 6l12 12" />
+                    <path d="M18 6L6 18" />
+                  </svg>
+                </button>
+              </div>
             </div>
-            <button className="btn btn-ghost full" type="button" onClick={() => setLoginOpen(false)}>
-              {t("login.cancel")}
-            </button>
+            <iframe className="preview-frame" src={previewDoc.href} title={previewDoc.name} />
+          </div>
+        </div>
+      ) : null}
+
+      {loginOpen ? (
+        <div className="modal" onClick={(event) => event.target === event.currentTarget && closeLogin()}>
+          <div className="modal-card login-card">
+            {pendingRole ? (
+              <>
+                <div className="login-head">
+                  <span className="login-lock" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 21h18" />
+                      <path d="M6 21V5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v16" />
+                      <path d="M15 9h3a1 1 0 0 1 1 1v11" />
+                      <path d="M9 8h2" />
+                      <path d="M9 12h2" />
+                      <path d="M9 16h2" />
+                    </svg>
+                  </span>
+                  <p className="login-eyebrow">{lang === "mn" ? "Сан сонгох" : "Select fund"}</p>
+                </div>
+                <div className="role-list">
+                  {funds.map((fund) => (
+                    <button
+                      key={fund.id}
+                      className="role-option"
+                      type="button"
+                      onClick={() => toInternal(pendingRole, fund.id)}
+                    >
+                      <span className="role-option-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 21h18" />
+                          <path d="M6 21V5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v16" />
+                          <path d="M15 9h3a1 1 0 0 1 1 1v11" />
+                          <path d="M9 8h2" />
+                          <path d="M9 12h2" />
+                          <path d="M9 16h2" />
+                        </svg>
+                      </span>
+                      <span className="role-option-text">
+                        <span className="role-option-title">{fund.name}</span>
+                      </span>
+                      <span className="role-option-arrow" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M9 6l6 6-6 6" />
+                        </svg>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <button className="login-cancel" type="button" onClick={() => setPendingRole(null)}>
+                  {lang === "mn" ? "Буцах" : "Back"}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="login-head">
+                  <span className="login-lock" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="4" y="11" width="16" height="9" rx="2" />
+                      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                    </svg>
+                  </span>
+                  <p className="login-eyebrow">{t("internal.brand")}</p>
+                </div>
+                <div className="role-list">
+                  {([
+                    {
+                      role: "board_member" as Role,
+                      title: t("role.board"),
+                      icon: (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="9" cy="8" r="3.2" />
+                          <path d="M3 19c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+                          <circle cx="17.5" cy="7.5" r="2.4" />
+                          <path d="M16 13a5 5 0 0 1 5 5" />
+                        </svg>
+                      )
+                    },
+                    {
+                      role: "fund_manager" as Role,
+                      title: t("role.fund"),
+                      icon: (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M4 20V4" />
+                          <path d="M4 20h16" />
+                          <rect x="7" y="12" width="3" height="5" />
+                          <rect x="13" y="8" width="3" height="9" />
+                        </svg>
+                      )
+                    },
+                    {
+                      role: "general_admin" as Role,
+                      title: t("role.admin"),
+                      icon: (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 3l7 3v5c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6z" />
+                          <path d="M9 12l2 2 4-4" />
+                        </svg>
+                      )
+                    }
+                  ]).map((opt) => (
+                    <button
+                      key={opt.role}
+                      className="role-option"
+                      type="button"
+                      onClick={() => chooseRole(opt.role)}
+                    >
+                      <span className="role-option-icon">{opt.icon}</span>
+                      <span className="role-option-text">
+                        <span className="role-option-title">{opt.title}</span>
+                      </span>
+                      <span className="role-option-arrow" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M9 6l6 6-6 6" />
+                        </svg>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <button className="login-cancel" type="button" onClick={closeLogin}>
+                  {t("login.cancel")}
+                </button>
+              </>
+            )}
           </div>
         </div>
       ) : null}
