@@ -1,8 +1,30 @@
-import { type FormEvent, type ReactElement, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type FormEvent,
+  type MouseEvent as ReactMouseEvent,
+  type ReactElement,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import * as XLSX from "xlsx";
-import ReportsAdmin from "./components/ReportsAdmin";
+import AdminPanel, { type Section as AdminSection } from "./components/AdminPanel";
 import { isSupabaseConfigured } from "./lib/supabase";
-import { type Quote, fetchQuotes, isMarketConfigured } from "./lib/market";
+import {
+  type Quote,
+  type FxRate,
+  type ChartRange,
+  type ChartSeries,
+  type CryptoStat,
+  fetchPrices,
+  fetchQuotes,
+  fetchBoMRates,
+  fetchChanges,
+  fetchCrypto,
+  fetchSpxSeries,
+  bomRatesFallback,
+  isMarketConfigured
+} from "./lib/market";
 import {
   REPORT_GROUPS,
   type ReportGroupKey,
@@ -10,13 +32,25 @@ import {
   listReports,
   reportFileUrl
 } from "./lib/reports";
-import { fundCalc, fundInputs } from "./data/fund-calc";
+import {
+  type ContactInfo,
+  type HomeCard,
+  type TeamMember,
+  type TimelineEvent,
+  getContact,
+  listHomeCards,
+  listTeamMembers,
+  listTimelineEvents,
+  teamPhotoUrl
+} from "./lib/cms";
+import { computeFund, fundCalc, fundInputs } from "./data/fund-calc";
 import fundTrades from "./data/fund-trades.json";
 import fundBanks from "./data/fund-banks.json";
 import fundInvestorSubscriptions from "./data/fund-investor-subscriptions.json";
 import fundTradeSummary from "./data/fund-trade-summary.json";
 
 type Lang = "mn" | "en";
+type Page = "home" | "about" | "funds" | "reports";
 type Role = "board_member" | "fund_manager" | "general_admin";
 type FundManagerTab =
   | "nav"
@@ -26,7 +60,11 @@ type FundManagerTab =
   | "new_trades"
   | "users"
   | "reports"
-  | "settings";
+  | "settings"
+  | "mission"
+  | "team"
+  | "timeline"
+  | "contact";
 
 type InvestorSubscription = {
   no: number | null;
@@ -124,12 +162,48 @@ const translations: Record<Lang, TranslationMap> = {
   mn: {
     "brand.sub": "Улаанбаатар Ассет Менежмент",
     "nav.home": "Эхлэл",
-    "nav.about": "Бидны зорилго",
+    "nav.about": "Бидний тухай",
+    "nav.funds": "Хөрөнгө оруулалтын сангууд",
     "nav.strategy": "Стратеги",
     "nav.team": "Баг хамт олон",
     "nav.timeline": "Түүхэн замнал",
-    "nav.financials": "Тайлан & Журам",
+    "nav.financials": "Тайлан журам",
     "nav.contact": "Холбоо барих",
+    "about.eyebrow": "Бидний тухай",
+    "about.title": "Эрхэм зорилго, үнэт зүйлс",
+    "about.intro": "Биднийг хөтөлж буй алсын хараа, эрхэм зорилго, үнэт зүйлс.",
+    "team.eyebrow": "Манай хүмүүс",
+    "timeline.eyebrow": "Түүхэн замнал",
+    "value.title": "Дэлхийн зах зээлд, мэргэжлийн түвшинд",
+    "value.intro": "Бид Монголын хөрөнгө оруулагчдад олон улсын зах зээлд институцийн түвшний хүртээмжийг нээж өгдөг.",
+    "value.c1.t": "Олон улсын зах зээл",
+    "value.c1.d": "Хойд Америк, Европ, Азийн тэргүүлэх биржүүдэд хөрөнгө оруулна.",
+    "value.c2.t": "Мэргэжлийн удирдлага",
+    "value.c2.d": "Туршлагатай, мэргэжлийн баг таны хөрөнгийг удирдана.",
+    "value.c3.t": "Хил хязгааргүй хүртээмж",
+    "value.c3.d": "Дотоодын хөрөнгө оруулагчдад дэлхийн зах зээлд нэвтрэх боломж.",
+    "value.assets": "Хөрөнгө оруулах боломж",
+    "asset.global": "Олон улсын хувьцаа",
+    "asset.domestic": "Дотоодын хувьцаа",
+    "asset.bonds": "Бонд",
+    "asset.realestate": "Үл хөдлөх хөрөнгө",
+    "markets.title": "Зах зээлийн тойм",
+    "markets.asia": "Азийн зах зээл",
+    "markets.us": "АНУ-ын зах зээл",
+    "markets.europe": "Европын зах зээл",
+    "markets.fx": "Монгол банкны ханш",
+    "markets.commodities": "Салбаруудын зах зээл",
+    "markets.indices": "Гол индексүүд",
+    "markets.fxNote": "Эх сурвалж: Монголбанк. 1 нэгж валют = ₮ (төгрөг). Заримдаа төлөөлөх утга харуулна.",
+    "funds.intro": "Бид хөрөнгө оруулагчдынхаа итгэлийг даган мэргэжлийн удирдлагатай сан удирдаж байна.",
+    "funds.misheel.name": "Мишээл сан",
+    "funds.misheel.tag": "Хувьцаа, бонд, мөнгөн хөрөнгийн төрөлжсөн сан",
+    "funds.misheel.desc": "Мишээл сан нь дотоод болон гадаадын хувьцаа, тогтмол өгөөжтэй бонд, мөнгөн хөрөнгийг хослуулсан, эрсдэлээ удирдсан, урт хугацааны өсөлтөд чиглэсэн хөрөнгө оруулалтын сан юм.",
+    "funds.point1": "Олон улсын зах зээлд төрөлжсөн хөрөнгө оруулалт",
+    "funds.point2": "Эрсдэлийг идэвхтэй удирдсан мэргэжлийн менежмент",
+    "funds.point3": "Хөрөнгө оруулагчдад ил тод тайлагнал",
+    "funds.cta": "Нэвтрэн дэлгэрэнгүй үзэх",
+    "funds.committee": "Хөрөнгө оруулалтын хороо",
     "auth.login": "Нэвтрэх",
     "hero.kicker": "Investment Management",
     "hero.body": "Бид гайхамшигт түүхийг бүтээгч, Азийн хамгийн шилдэг санхүүгийн тоглогч байна.",
@@ -149,15 +223,15 @@ const translations: Record<Lang, TranslationMap> = {
     "strategy.s2": "Үл Хөдлөх Хөрөнгийн ХОС",
     "strategy.s3": "Түрээсийн ХОС",
     "strategy.s4": "Хаалттай Компанийн Хувьцааны ХОС",
-    "team.title": "Менежментийн баг",
+    "team.title": "Удирдлагын баг",
     "timeline.title": "Он цагийн хэлхээс",
     "investor.title": "Хөрөнгө оруулагч",
     "investor.subtitle": "Хөрөнгө оруулагчдад зориулсан веб систем",
     "contact.title": "Холбоо барих",
-    "contact.company": "Улаанбаатар Ассет Менежмент ҮЦК ХХК",
+    "contact.company": "Улаанбаатар Ассет Менежмент ХХК",
     "contact.address":
       "Улаанбаатар хот, Сүхбаатар дүүрэг, 1-р хороо, Чингисийн өргөн чөлөө - 24, Парк Плэйс барилга, 4 давхар, 401 тоот",
-    "footer.copy": "© 2026 Улаанбаатар Ассет Менежмент ҮЦК ХХК.",
+    "footer.copy": "© 2026 Улаанбаатар Ассет Менежмент ХХК.",
     "login.title": "Дотоод системд нэвтрэх",
     "login.desc": "Нэвтрэх эрхээ сонгоно уу.",
     "login.cancel": "Буцах",
@@ -191,7 +265,7 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.trades.inactiveStocks": "Идэвхгүй хувьцаа",
     "internal.trades.inactiveOptions": "Идэвхгүй опцион",
     "internal.fmTabs.users": "Хэрэглэгчид",
-    "internal.fmTabs.reports": "Тайлан & Журам",
+    "internal.fmTabs.reports": "Удирдлага",
     "internal.fmTabs.settings": "Тохиргоо",
     "internal.page.nav.title": "Цэвэр хөрөнгийн үнэлгээ",
     "internal.page.nav.subtitle": "Сангийн NAV болон гол үзүүлэлтүүдийг хянана.",
@@ -429,12 +503,48 @@ const translations: Record<Lang, TranslationMap> = {
   en: {
     "brand.sub": "Ulaanbaatar Asset Management",
     "nav.home": "Home",
-    "nav.about": "Our Mission",
+    "nav.about": "About us",
+    "nav.funds": "Investment funds",
     "nav.strategy": "Strategy",
     "nav.team": "Our Team",
     "nav.timeline": "History",
     "nav.financials": "Reports & Regulations",
     "nav.contact": "Contact",
+    "about.eyebrow": "About us",
+    "about.title": "Our vision, mission & values",
+    "about.intro": "The vision, mission and values that guide everything we do.",
+    "team.eyebrow": "Our people",
+    "timeline.eyebrow": "Our journey",
+    "value.title": "The world's markets, professionally managed",
+    "value.intro": "We open institutional-grade access to international markets for Mongolian investors.",
+    "value.c1.t": "Global markets",
+    "value.c1.d": "Investing across leading exchanges in North America, Europe and Asia.",
+    "value.c2.t": "Professional management",
+    "value.c2.d": "An experienced, professional team manages your capital.",
+    "value.c3.t": "Borderless access",
+    "value.c3.d": "Direct access to global markets for domestic investors.",
+    "value.assets": "Invest across",
+    "asset.global": "Global stocks",
+    "asset.domestic": "Domestic stocks",
+    "asset.bonds": "Bonds",
+    "asset.realestate": "Real estate",
+    "markets.title": "Market overview",
+    "markets.asia": "Asian markets",
+    "markets.us": "US markets",
+    "markets.europe": "European markets",
+    "markets.fx": "Bank of Mongolia rates",
+    "markets.commodities": "Market sectors",
+    "markets.indices": "Major indices",
+    "markets.fxNote": "Source: Bank of Mongolia. 1 unit of currency = ₮ (MNT). Representative values may be shown.",
+    "funds.intro": "We manage professionally-run funds in line with the trust our investors place in us.",
+    "funds.misheel.name": "Misheel Fund",
+    "funds.misheel.tag": "Diversified equity, bond & cash fund",
+    "funds.misheel.desc": "The Misheel Fund is a risk-managed, long-term growth fund combining domestic and international equities, fixed-income bonds, and cash holdings.",
+    "funds.point1": "Diversified exposure across international markets",
+    "funds.point2": "Active, professional risk-managed strategy",
+    "funds.point3": "Transparent reporting for investors",
+    "funds.cta": "Log in to view details",
+    "funds.committee": "Investment committee",
     "auth.login": "Log in",
     "hero.kicker": "Investment Management",
     "hero.body": "We are the creators of a wonderful history and the best financial players in Asia.",
@@ -495,7 +605,7 @@ const translations: Record<Lang, TranslationMap> = {
     "internal.trades.inactiveStocks": "Closed stocks",
     "internal.trades.inactiveOptions": "Closed options",
     "internal.fmTabs.users": "Users",
-    "internal.fmTabs.reports": "Reports & Regulations",
+    "internal.fmTabs.reports": "Admin",
     "internal.fmTabs.settings": "Settings",
     "internal.page.nav.title": "Net Asset Value",
     "internal.page.nav.subtitle": "Track the fund's NAV and key performance indicators.",
@@ -773,6 +883,386 @@ function MemberAvatar({ name, photo }: { name: string; photo?: string }) {
   return <div className="member-avatar">{initials(name)}</div>;
 }
 
+// Lightweight inline SVG sparkline (area + line). Stretches to its container.
+function Sparkline({ data, up }: { data: number[]; up: boolean }) {
+  const w = 100;
+  const h = 36;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const span = max - min || 1;
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * w;
+    const y = h - ((v - min) / span) * (h - 4) - 2;
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  });
+  const line = `M${pts.join(" L")}`;
+  const area = `${line} L${w},${h} L0,${h} Z`;
+  const color = up ? "#0a8a4a" : "#c0392b";
+  return (
+    <svg className="spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden="true">
+      <path d={area} fill={color} fillOpacity="0.12" />
+      <path d={line} fill="none" stroke={color} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+const CHART_RANGES: ChartRange[] = ["1D", "1M", "3M", "1Y", "5Y", "All"];
+
+// Representative S&P (SPY-scale) series per range — used until a live key is set
+// or when a request fails, so the chart is always interactive.
+function fallbackSeries(range: ChartRange): ChartSeries {
+  const cfg: Record<ChartRange, [number, number]> = {
+    "1D": [78, -1.22],
+    "1M": [22, 2.1],
+    "3M": [66, -3.4],
+    "1Y": [252, 12.5],
+    "5Y": [260, 70],
+    All: [360, 280]
+  };
+  const [n, target] = cfg[range];
+  const last = 743.2;
+  const first = last / (1 + target / 100);
+  const amp = last * 0.004;
+  const points: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const f = i / (n - 1);
+    const base = first + (last - first) * f;
+    points.push(base + amp * Math.sin(i * 0.7) + amp * 0.6 * Math.sin(i * 0.23));
+  }
+  points[n - 1] = last;
+  const f0 = points[0];
+  return {
+    points,
+    times: points.map(() => ""),
+    last,
+    changeAbs: last - f0,
+    changePct: ((last - f0) / f0) * 100
+  };
+}
+
+const fmtPrice = (n: number) =>
+  n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Dependency-free CSS 3D wireframe globe — the "borderless / global markets"
+// hero of the market overview, replacing the featured chart.
+const GLOBE_MERIDIANS = [0, 20, 40, 60, 80, 100, 120, 140, 160];
+function FeaturedGlobe({ lang }: { lang: Lang }) {
+  return (
+    <div className="ms-card ms-globe-card">
+      <div className="globe-caption">
+        <span className="globe-kicker">
+          {lang === "mn" ? "Дэлхийн зах зээл" : "Global markets"}
+        </span>
+        <span className="globe-sub">
+          {lang === "mn" ? "Хил хязгааргүй хөрөнгө оруулалт" : "Borderless investing"}
+        </span>
+      </div>
+      <div className="globe-stage">
+        <div className="globe">
+          {GLOBE_MERIDIANS.map((deg) => (
+            <span
+              key={deg}
+              className="globe-ring globe-meridian"
+              style={{ transform: `rotateY(${deg}deg)` }}
+            />
+          ))}
+          <span className="globe-ring globe-equator" />
+          <span className="globe-ring globe-lat globe-lat-n" />
+          <span className="globe-ring globe-lat globe-lat-s" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Representative market-overview data (structure mirrors a market summary board;
+// values are indicative until wired to a live feed).
+const featuredIndex = {
+  badge: "500",
+  name: "S&P 500 Index",
+  value: "7,383.20",
+  changeAbs: "-91.20",
+  changePct: -1.22,
+  series: [
+    7460, 7468, 7472, 7465, 7458, 7451, 7455, 7448, 7440, 7435, 7442, 7430, 7424,
+    7418, 7410, 7415, 7404, 7398, 7402, 7394, 7388, 7392, 7385, 7383
+  ]
+};
+
+// ---- Heatmap (squarified treemap) -----------------------------------------
+type HeatItem = { label: string; weight: number; change: number; symbol?: string };
+type HeatRect = { x: number; y: number; w: number; h: number; label: string; change?: number; header?: boolean };
+
+// Squarified treemap: lays items into (0,0)-(W,H), keeping tiles near-square.
+function squarifyRects(items: HeatItem[], W: number, H: number) {
+  const nodes = items
+    .filter((it) => it.weight > 0)
+    .sort((a, b) => b.weight - a.weight)
+    .map((it) => ({ item: it, area: 0 }));
+  if (!nodes.length || W <= 0 || H <= 0) return [];
+  const total = nodes.reduce((s, n) => s + n.item.weight, 0);
+  const totalArea = W * H;
+  nodes.forEach((n) => (n.area = (n.item.weight / total) * totalArea));
+
+  const out: Array<{ x: number; y: number; w: number; h: number; item: HeatItem }> = [];
+  let x = 0;
+  let y = 0;
+  let w = W;
+  let h = H;
+  let row: typeof nodes = [];
+
+  const worst = (r: typeof nodes, side: number) => {
+    const sum = r.reduce((a, n) => a + n.area, 0);
+    const mx = Math.max(...r.map((n) => n.area));
+    const mn = Math.min(...r.map((n) => n.area));
+    const s2 = sum * sum;
+    const side2 = side * side;
+    return Math.max((side2 * mx) / s2, s2 / (side2 * mn));
+  };
+  const flush = (r: typeof nodes) => {
+    const sum = r.reduce((a, n) => a + n.area, 0);
+    if (w >= h) {
+      const rw = sum / h;
+      let ry = y;
+      for (const n of r) {
+        const rh = n.area / rw;
+        out.push({ x, y: ry, w: rw, h: rh, item: n.item });
+        ry += rh;
+      }
+      x += rw;
+      w -= rw;
+    } else {
+      const rh = sum / w;
+      let rx = x;
+      for (const n of r) {
+        const rw2 = n.area / rh;
+        out.push({ x: rx, y, w: rw2, h: rh, item: n.item });
+        rx += rw2;
+      }
+      y += rh;
+      h -= rh;
+    }
+  };
+
+  for (const n of nodes) {
+    if (!row.length) {
+      row.push(n);
+      continue;
+    }
+    const side = Math.min(w, h);
+    if (worst([...row, n], side) <= worst(row, side)) row.push(n);
+    else {
+      flush(row);
+      row = [n];
+    }
+  }
+  if (row.length) flush(row);
+  return out;
+}
+
+// Treemap a flat list, returning rects in percentage space.
+function flatHeat(items: HeatItem[], W: number, H: number): HeatRect[] {
+  return squarifyRects(items, W, H).map((p) => ({
+    x: (p.x / W) * 100,
+    y: (p.y / H) * 100,
+    w: (p.w / W) * 100,
+    h: (p.h / H) * 100,
+    label: p.item.label,
+    change: p.item.change
+  }));
+}
+
+// Treemap grouped categories (each gets a header strip), in percentage space.
+function groupedHeat(
+  groups: Array<{ name: string; items: HeatItem[] }>,
+  W: number,
+  H: number,
+  headerH: number
+): HeatRect[] {
+  const cats: HeatItem[] = groups.map((g) => ({
+    label: g.name,
+    weight: g.items.reduce((s, i) => s + i.weight, 0),
+    change: 0
+  }));
+  const out: HeatRect[] = [];
+  for (const cr of squarifyRects(cats, W, H)) {
+    const g = groups.find((gr) => gr.name === cr.item.label);
+    if (!g) continue;
+    out.push({ x: (cr.x / W) * 100, y: (cr.y / H) * 100, w: (cr.w / W) * 100, h: (headerH / H) * 100, label: g.name, header: true });
+    const innerH = cr.h - headerH;
+    if (innerH <= 4) continue;
+    for (const ch of squarifyRects(g.items, cr.w, innerH)) {
+      out.push({
+        x: ((cr.x + ch.x) / W) * 100,
+        y: ((cr.y + headerH + ch.y) / H) * 100,
+        w: (ch.w / W) * 100,
+        h: (ch.h / H) * 100,
+        label: ch.item.label,
+        change: ch.item.change
+      });
+    }
+  }
+  return out;
+}
+
+function heatColor(change: number): string {
+  // Crisp red/green; magnitude adds vividness (not darkness), never grey/muddy.
+  const mag = Math.min(Math.abs(change) / 3.5, 1);
+  if (change >= 0) {
+    const s = 44 + mag * 22; // 44%..66%
+    const l = 43 - mag * 7; // 43%..36%
+    return `hsl(147 ${s}% ${l}%)`;
+  }
+  const s = 62 + mag * 16; // 62%..78%
+  const l = 49 - mag * 9; // 49%..40%
+  return `hsl(3 ${s}% ${l}%)`;
+}
+
+function Heatmap({ rects, height }: { rects: HeatRect[]; height: number }) {
+  return (
+    <div className="heatmap" style={{ height }}>
+      {rects.map((r, i) =>
+        r.header ? (
+          <div
+            key={`h-${i}`}
+            className="heat-head"
+            style={{ left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%` }}
+          >
+            {r.label}
+          </div>
+        ) : (
+          <div
+            key={`t-${i}`}
+            className="heat-tile"
+            style={{
+              left: `${r.x}%`,
+              top: `${r.y}%`,
+              width: `${r.w}%`,
+              height: `${r.h}%`,
+              background: heatColor(r.change ?? 0)
+            }}
+          >
+            <span className="heat-label">{r.label}</span>
+            <span className="heat-chg">
+              {(r.change ?? 0) >= 0 ? "+" : ""}
+              {(r.change ?? 0).toFixed(2)}%
+            </span>
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+// Index heatmap (weights = rough relative prominence; symbol = Finnhub ETF proxy).
+const indexHeatItems: HeatItem[] = [
+  { label: "S&P 500", symbol: "SPY", weight: 100, change: -1.22 },
+  { label: "Nasdaq 100", symbol: "QQQ", weight: 82, change: -0.19 },
+  { label: "Japan 225", symbol: "EWJ", weight: 48, change: -3.55 },
+  { label: "SSE Composite", symbol: "MCHI", weight: 42, change: 0.72 },
+  { label: "DAX", symbol: "EWG", weight: 34, change: 0.62 },
+  { label: "FTSE 100", symbol: "EWU", weight: 34, change: 0.72 },
+  { label: "CAC 40", symbol: "EWQ", weight: 26, change: -0.25 }
+];
+
+// Stock-market heatmap, grouped by sector (representative large-caps & values).
+const marketGroups: Array<{ name: string; items: HeatItem[] }> = [
+  {
+    name: "TECHNOLOGY",
+    items: [
+      { label: "AAPL", weight: 60, change: -0.8 },
+      { label: "MSFT", weight: 58, change: -1.2 },
+      { label: "NVDA", weight: 55, change: -0.97 },
+      { label: "AVGO", weight: 30, change: -1.5 },
+      { label: "ORCL", weight: 18, change: 0.6 },
+      { label: "ADBE", weight: 14, change: -0.9 }
+    ]
+  },
+  {
+    name: "COMMUNICATION",
+    items: [
+      { label: "GOOGL", weight: 40, change: -2.1 },
+      { label: "META", weight: 35, change: -2.32 },
+      { label: "NFLX", weight: 16, change: 0.4 },
+      { label: "DIS", weight: 10, change: -0.7 }
+    ]
+  },
+  {
+    name: "CONSUMER",
+    items: [
+      { label: "AMZN", weight: 45, change: -1.8 },
+      { label: "TSLA", weight: 30, change: 1.14 },
+      { label: "HD", weight: 14, change: 0.3 },
+      { label: "MCD", weight: 12, change: -0.4 },
+      { label: "NKE", weight: 9, change: -1.1 }
+    ]
+  },
+  {
+    name: "FINANCIALS",
+    items: [
+      { label: "JPM", weight: 35, change: 1.92 },
+      { label: "BRK.B", weight: 30, change: 0.2 },
+      { label: "V", weight: 28, change: 0.5 },
+      { label: "MA", weight: 24, change: 0.4 },
+      { label: "BAC", weight: 18, change: 0.9 }
+    ]
+  },
+  {
+    name: "HEALTHCARE",
+    items: [
+      { label: "LLY", weight: 35, change: 1.1 },
+      { label: "UNH", weight: 25, change: -0.6 },
+      { label: "JNJ", weight: 20, change: 0.3 },
+      { label: "MRK", weight: 16, change: -0.4 },
+      { label: "PFE", weight: 10, change: -0.8 }
+    ]
+  },
+  {
+    name: "ENERGY",
+    items: [
+      { label: "XOM", weight: 22, change: -1.4 },
+      { label: "CVX", weight: 18, change: -1.1 },
+      { label: "COP", weight: 10, change: -0.9 }
+    ]
+  },
+  {
+    name: "INDUSTRIALS",
+    items: [
+      { label: "CAT", weight: 16, change: 0.7 },
+      { label: "GE", weight: 12, change: 0.5 },
+      { label: "BA", weight: 12, change: -1.3 }
+    ]
+  }
+];
+
+// Representative crypto values shown until the live CoinGecko data arrives.
+const cryptoFallback: CryptoStat[] = [
+  {
+    code: "BTC",
+    nameMn: "Биткойн",
+    nameEn: "Bitcoin",
+    value: "$108,000",
+    change: -1.4,
+    series: [110, 109.2, 109.6, 108.4, 108.8, 107.9, 108.3, 107.6, 108.1, 107.4, 108]
+  },
+  {
+    code: "ETH",
+    nameMn: "Этериум",
+    nameEn: "Ethereum",
+    value: "$3,900",
+    change: -2.1,
+    series: [4.02, 3.98, 3.95, 3.97, 3.9, 3.92, 3.86, 3.9, 3.88, 3.91, 3.9]
+  },
+  {
+    code: "SOL",
+    nameMn: "Солана",
+    nameEn: "Solana",
+    value: "$175",
+    change: -3.0,
+    series: [188, 185, 186, 182, 183, 179, 181, 177, 178, 176, 175]
+  }
+];
+
 const timelineData: Record<Lang, Array<{ year: string; text: string }>> = {
   mn: [
     { year: "2011", text: "Ассет Менежментийн үйл ажиллагааны чиглэлтэйгээр үүсгэн байгуулагдав." },
@@ -794,9 +1284,100 @@ const timelineData: Record<Lang, Array<{ year: string; text: string }>> = {
 
 // Localized titles for the three report groups (keys match the Supabase group_key).
 const reportGroupTitles: Record<Lang, Record<ReportGroupKey, string>> = {
-  mn: { activity: "Үйл ажиллагааны тайлан", audit: "Аудитын тайлан", regulations: "Журам" },
-  en: { activity: "Operational report", audit: "Audit report", regulations: "Regulations" }
+  mn: { tailan: "Тайлан", bodlogo: "Бодлого", juram: "Журам", udirdamj: "Удирдамж" },
+  en: { tailan: "Reports", bodlogo: "Policy", juram: "Procedures", udirdamj: "Guidelines" }
 };
+
+// The two funds the company manages (shown via a dropdown on the Funds page).
+type CommitteeMember = {
+  nameMn: string;
+  nameEn: string;
+  roleMn: string;
+  roleEn: string;
+  photo: string;
+};
+type FundSection = { headingMn: string; headingEn: string; bodyMn: string[]; bodyEn: string[] };
+type FundInfo = {
+  id: string;
+  nameMn: string;
+  nameEn: string;
+  tagMn?: string;
+  tagEn?: string;
+  sections?: FundSection[];
+  comingSoon?: boolean;
+  committee?: CommitteeMember[];
+};
+const FUNDS: FundInfo[] = [
+  {
+    id: "misheel",
+    nameMn: "Мишээл Рийл Истэйт Фанд",
+    nameEn: "Misheel Real Estate Fund",
+    sections: [
+      {
+        headingMn: "Танилцуулга",
+        headingEn: "Overview",
+        bodyMn: [
+          "Мишээл Фанд нь олон улсын хувьцааны зах зээлд мэргэшсэн, дотоодын хөрөнгө оруулагчдад зохицуулалттай бөгөөд нэгдсэн хэрэгслээр дамжуулан дэлхийн зах зээлд гарах боломжийг олгодог хувийн хөрөнгө оруулалтын сан юм. Бид Хойд Америк, Европ, Азийн тэргүүлэх биржүүдэд хөрөнгө оруулж, урт хугацааны өсөлтийн стратегийг тактикийн уян хатан шийдвэрүүдтэй хослуулан, хөрөнгө оруулагчдынхаа үнэ цэнийг тогтвортой өсгөхийг зорьдог. Сангийн үйл ажиллагааг Санхүүгийн Зохицуулах Хорооны №380/11 тоот тусгай зөвшөөрөлтэй Улаанбаатар Ассет Менежмент ХХК мэргэжлийн түвшинд удирдан зохион байгуулдаг."
+        ],
+        bodyEn: [
+          "Misheel Fund is a private investment fund that gives qualified investors structured access to international equity markets through a single regulated vehicle. The fund invests across global exchanges — North America, Europe, and Asia — combining growth-oriented positions with selective tactical exposures, with the aim of generating long-term capital appreciation for its investors.",
+          "The fund is managed by Ulaanbaatar Asset Management LLC, regulated by the Financial Regulatory Commission of Mongolia under license №380/11."
+        ]
+      },
+      {
+        headingMn: "Хөрөнгө оруулалтын бодлого",
+        headingEn: "Investment approach",
+        bodyMn: [
+          "Бид олон улсын хувьцаа, биржээр арилжаалагддаг сан буюу ETF болон тэдгээртэй холбогдох санхүүгийн хэрэгслүүдээс бүрдсэн, салбар болон валютын өндөр төрөлжилттэй багцыг удирддаг. Хөрөнгө оруулалтын шийдвэр гаргахдаа суурь шинжилгээний гүн гүнзгий судалгаанд тулгуурлаж, техникийн шинжилгээ болон эрсдэлийн удирдлагын хатуу сахилга батыг баримталдаг."
+        ],
+        bodyEn: [
+          "The fund holds a diversified portfolio of international equities, ETFs, and related instruments across multiple sectors and currencies. Positions are taken based on fundamental conviction, supported by technical analysis and disciplined risk management."
+        ]
+      },
+      {
+        headingMn: "Бидний оршин тогтнох шалтгаан",
+        headingEn: "Why this fund exists",
+        bodyMn: [
+          "Олон улсын санхүүгийн зах зээл нь олон төрлийн бирж, валютын зөрүү, цагийн бүс болон хууль эрх зүйн ялгаатай орчныг даван туулж чадсан хөрөнгө оруулагчдад асар их боломжийг олгодог. Гэвч Монголын ихэнх хөрөнгө оруулагчдын хувьд санхүүгийн чадамжаас илүүтэйгээр олон улсын багцыг удирдах дэд бүтэц, мэргэжлийн судалгаа болон үйл ажиллагааны нарийн төвөгтэй байдал нь дэлхийн зах зээлд шууд нэвтрэхэд гол саад тотгор болдог юм.",
+          "Мишээл Фанд яг энэ орон зайг нөхдөг. Бид дотоодын хөрөнгө оруулагчдад бие даан нэвтрэхэд хүндрэлтэй дэлхийн зах зээлд институцийн түвшний хүртээмжийг олгож байна. Ингэхдээ мэргэжлийн багийн гүнзгий судалгаа, олон улсын гүйцэтгэлийн дэд бүтэц болон эрсдэлийн удирдлагын цогц системийг хамтад нь санал болгож байна."
+        ],
+        bodyEn: [
+          "International markets offer real opportunities to investors who can navigate multiple exchanges, currencies, time zones, and regulatory regimes. Most Mongolian investors cannot — not because they lack capital, but because the infrastructure, the research, and the operational complexity of running a multi-currency international book are out of reach.",
+          "Misheel Fund closes that gap. It gives Mongolian investors institutional-grade access to markets they would otherwise have to navigate alone, with the research depth, execution infrastructure, and risk discipline of a professional management team."
+        ]
+      }
+    ],
+    committee: [
+      {
+        nameMn: "Н. Монсор",
+        nameEn: "N. Monsor",
+        roleMn: "Гүйцэтгэх захирал, ТУЗ-гишүүн",
+        roleEn: "CEO, Board member",
+        photo: "/assets/team/monsor.png"
+      },
+      {
+        nameMn: "А. Уянга",
+        nameEn: "A. Uyanga",
+        roleMn: "ХОС зөвлөх",
+        roleEn: "Investment fund advisor",
+        photo: "/assets/team/uyanga.png"
+      },
+      {
+        nameMn: "А. Идэрбат",
+        nameEn: "A. Iderbat",
+        roleMn: "ХОС зөвлөх",
+        roleEn: "Investment fund advisor",
+        photo: "/assets/team/iderbat.png"
+      }
+    ]
+  },
+  {
+    id: "kk",
+    nameMn: "КК Рийл Истэйт Фанд",
+    nameEn: "KK Real Estate Fund",
+    comingSoon: true
+  }
+];
 
 // Placeholder documents shown when Supabase is not yet configured / empty.
 type ReportDoc = { name: string; href: string };
@@ -921,6 +1502,9 @@ function readLangFromQuery(): Lang | null {
   }
   return null;
 }
+
+// When set at build time, hide the login / internal portal and serve only the public landing page.
+const PUBLIC_ONLY = import.meta.env.VITE_PUBLIC_ONLY === "true";
 
 function isInternalPath() {
   return window.location.pathname === "/internal" || window.location.pathname === "/internal/";
@@ -1193,7 +1777,7 @@ function tabIcon(id: FundManagerTab): ReactElement {
 }
 
 export default function App() {
-  const initialInternal = useMemo(() => isInternalPath(), []);
+  const initialInternal = useMemo(() => isInternalPath() && !PUBLIC_ONLY, []);
   const initialRole = useMemo(() => readRoleFromQuery(), []);
   const initialLang = useMemo(
     () => readLangFromQuery() ?? ((localStorage.getItem("lang") as Lang | null) ?? "mn"),
@@ -1201,6 +1785,11 @@ export default function App() {
   );
 
   const [lang, setLang] = useState<Lang>(initialLang === "en" ? "en" : "mn");
+  const [page, setPage] = useState<Page>("home");
+  // Each nav click is a real page switch, so jump back to the top.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [page]);
   const [role] = useState<Role>(initialRole);
   const [loginOpen, setLoginOpen] = useState(false);
   const [pendingRole, setPendingRole] = useState<Role | null>(null);
@@ -1224,49 +1813,22 @@ export default function App() {
   }, []);
   const tickerItems: Quote[] =
     liveQuotes ?? marketIndexes.map((m) => ({ label: m.name, value: m.value, change: m.change }));
-  const sideNavSections = [
-    { id: "hero", key: "nav.home" },
-    { id: "about", key: "nav.about" },
-    { id: "team", key: "nav.team" },
-    { id: "timeline", key: "nav.timeline" },
-    { id: "financials", key: "nav.financials" },
-    { id: "contact", key: "nav.contact" }
-  ];
-  const [activeSection, setActiveSection] = useState("hero");
+  // Home-page Bank of Mongolia exchange rates (global indices come from the
+  // embedded TradingView widgets).
+  // Live market prices for the fund's US-listed equities → NAV recomputes from them.
+  const [livePrices, setLivePrices] = useState<Record<string, number>>({});
   useEffect(() => {
-    if (initialInternal) return;
-    const ids = ["hero", "about", "team", "timeline", "financials", "contact"];
-    let frame = 0;
-    // Active = whichever section occupies the most of the viewport right now.
-    const update = () => {
-      const vh = window.innerHeight;
-      let best = ids[0];
-      let bestVisible = -1;
-      for (const id of ids) {
-        const el = document.getElementById(id);
-        if (!el) continue;
-        const r = el.getBoundingClientRect();
-        const visible = Math.min(r.bottom, vh) - Math.max(r.top, 0);
-        if (visible > bestVisible) {
-          bestVisible = visible;
-          best = id;
-        }
-      }
-      setActiveSection(best);
-    };
-    const onScroll = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(update);
-    };
-    update();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-    };
-  }, [initialInternal]);
+    if (!initialInternal || !isMarketConfigured) return;
+    const symbols = fundInputs.equities
+      .filter((e) => e.currency === "USD" && e.type === "Stock" && /^[A-Z.]{1,6}$/.test(e.ticker))
+      .map((e) => e.ticker);
+    const load = () => fetchPrices(symbols).then(setLivePrices).catch(() => {});
+    load();
+    const id = setInterval(load, 60000);
+    return () => clearInterval(id);
+  }, []);
+  const liveFund = computeFund(livePrices);
+  const livePriceCount = Object.keys(livePrices).length;
   const [liveReports, setLiveReports] = useState<ReportRecord[] | null>(null);
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -1275,17 +1837,46 @@ export default function App() {
       .catch(() => setLiveReports(null));
   }, []);
   // Show live documents from Supabase when available; otherwise the built-in placeholders.
-  const displayReportGroups =
-    liveReports && liveReports.length > 0
-      ? REPORT_GROUPS.map((key) => ({
-          title: reportGroupTitles[lang][key],
-          items: liveReports
-            .filter((r) => r.group_key === key)
-            .map((r) => ({ name: r.title, href: reportFileUrl(r.file_path) }))
-        })).filter((g) => g.items.length > 0)
-      : reportGroups[lang];
+  // Only real uploaded documents — no placeholders. Empty groups show an empty state.
+  const [reportQuery, setReportQuery] = useState("");
+  const reportNeedle = reportQuery.trim().toLowerCase();
+  // Funds page: dropdown to switch between the company's funds.
+  const [fundIdx, setFundIdx] = useState(0);
+  const [fundMenuOpen, setFundMenuOpen] = useState(false);
+  const fundPickerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!fundMenuOpen) return;
+    const onDoc = (event: MouseEvent) => {
+      if (fundPickerRef.current && !fundPickerRef.current.contains(event.target as Node)) {
+        setFundMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [fundMenuOpen]);
+  const displayReportGroups = REPORT_GROUPS.map((key) => ({
+    title: reportGroupTitles[lang][key],
+    items: (liveReports ?? [])
+      .filter((r) => r.group_key === key)
+      .filter((r) => !reportNeedle || r.title.toLowerCase().includes(reportNeedle))
+      .map((r) => ({ name: r.title, href: reportFileUrl(r.file_path) }))
+  }));
+
+  // Live CMS content (overrides the built-in content when present).
+  const [liveCards, setLiveCards] = useState<HomeCard[] | null>(null);
+  const [liveTeam, setLiveTeam] = useState<TeamMember[] | null>(null);
+  const [liveTimeline, setLiveTimeline] = useState<TimelineEvent[] | null>(null);
+  const [liveContact, setLiveContact] = useState<ContactInfo | null>(null);
+  useEffect(() => {
+    if (!isSupabaseConfigured || initialInternal) return;
+    listHomeCards().then((d) => d.length && setLiveCards(d)).catch(() => {});
+    listTeamMembers().then((d) => d.length && setLiveTeam(d)).catch(() => {});
+    listTimelineEvents().then((d) => d.length && setLiveTimeline(d)).catch(() => {});
+    getContact().then((c) => c && setLiveContact(c)).catch(() => {});
+  }, []);
+
   const [activeFundTab, setActiveFundTab] = useState<FundManagerTab>(
-    initialRole === "general_admin" ? "reports" : "nav"
+    initialRole === "general_admin" ? "mission" : "nav"
   );
   const [tradeEntryOpen, setTradeEntryOpen] = useState(false);
   const [proposals, setProposals] = useState<Proposal[]>(initialProposals);
@@ -1677,9 +2268,21 @@ export default function App() {
   });
 
   const t = (key: string) => translations[lang][key] ?? key;
+  const adminIcon = (path: ReactElement) => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {path}
+    </svg>
+  );
   const fundManagerTabs: Array<{ id: FundManagerTab; label: string; icon: ReactElement }> =
     role === "general_admin"
-      ? [{ id: "reports", label: t("internal.fmTabs.reports"), icon: tabIcon("reports") }]
+      ? [
+          { id: "mission", label: lang === "mn" ? "Зорилго & Үнэт зүйлс" : "Mission & Values", icon: adminIcon(<><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4" /><circle cx="12" cy="12" r="0.6" fill="currentColor" /></>) },
+          { id: "team", label: lang === "mn" ? "Менежментийн баг" : "Management team", icon: tabIcon("users") },
+          { id: "timeline", label: lang === "mn" ? "Он цагийн хэлхээс" : "Timeline", icon: adminIcon(<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>) },
+          { id: "reports", label: lang === "mn" ? "Тайлан & Журам" : "Reports", icon: tabIcon("reports") },
+          { id: "contact", label: lang === "mn" ? "Холбоо барих" : "Contact", icon: adminIcon(<><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></>) },
+          { id: "users", label: lang === "mn" ? "Хэрэглэгчид" : "Users", icon: adminIcon(<><circle cx="12" cy="8" r="3.2" /><path d="M5 20c0-3.3 3-6 7-6s7 2.7 7 6" /></>) }
+        ]
       : [
           { id: "nav", label: t("internal.fmTabs.nav"), icon: tabIcon("nav") },
           { id: "portfolio", label: t("internal.fmTabs.portfolio"), icon: tabIcon("portfolio") },
@@ -1689,11 +2292,16 @@ export default function App() {
           { id: "users", label: t("internal.fmTabs.users"), icon: tabIcon("users") },
           { id: "settings", label: t("internal.fmTabs.settings"), icon: tabIcon("settings") }
         ];
-  const aboutCards = [
-    { title: t("about.visionTitle"), body: t("about.visionBody") },
-    { title: t("about.missionTitle"), body: t("about.missionBody") },
-    { title: t("about.valuesTitle"), body: t("about.valuesBody") }
-  ];
+  const aboutCards = liveCards
+    ? liveCards.map((c) => ({
+        title: lang === "mn" ? c.title_mn : c.title_en,
+        body: lang === "mn" ? c.body_mn : c.body_en
+      }))
+    : [
+        { title: t("about.visionTitle"), body: t("about.visionBody") },
+        { title: t("about.missionTitle"), body: t("about.missionBody") },
+        { title: t("about.valuesTitle"), body: t("about.valuesBody") }
+      ];
   // Triple the cards so a previous and next slide always exist (infinite loop).
   const aboutCount = aboutCards.length;
   const aboutLoopCards = [...aboutCards, ...aboutCards, ...aboutCards];
@@ -1705,17 +2313,24 @@ export default function App() {
   const [aboutViewportWidth, setAboutViewportWidth] = useState(0);
   const [aboutTrackX, setAboutTrackX] = useState(0);
   useEffect(() => {
+    // The About section mounts lazily when its page opens, so re-measure on
+    // page change (not just initial mount) or the cards render at zero width.
     const el = aboutViewportRef.current;
     if (!el) return;
     const update = () => setAboutViewportWidth(el.clientWidth);
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
-  }, []);
+  }, [page]);
   useEffect(() => {
+    // Only auto-rotate while the About page is open; otherwise the position
+    // drifts out of range and the carousel freezes when you return to it.
+    if (page !== "about") return;
+    // Re-center into the middle copy (in case it drifted) before rotating.
+    setAboutPos((p) => aboutCount + (((p % aboutCount) + aboutCount) % aboutCount));
     const id = setInterval(() => setAboutPos((p) => p + 1), 5000);
     return () => clearInterval(id);
-  }, []);
+  }, [page, aboutCount]);
   // Card takes half the viewport so each neighbour shows half of itself on the sides.
   const aboutCardFraction = aboutViewportWidth > 0 && aboutViewportWidth < 700 ? 0.78 : 0.5;
   const aboutCardPx = aboutViewportWidth * aboutCardFraction;
@@ -1761,7 +2376,16 @@ export default function App() {
   };
 
   const [activeMilestone, setActiveMilestone] = useState(0);
-  const combinedTimeline = timelineData[lang];
+  const combinedTimeline = liveTimeline
+    ? liveTimeline.map((e) => ({ year: e.year, text: lang === "mn" ? e.text_mn : e.text_en }))
+    : timelineData[lang];
+  const teamMembers = liveTeam
+    ? liveTeam.map((m) => ({
+        name: lang === "mn" ? m.name_mn : m.name_en,
+        role: lang === "mn" ? m.role_mn : m.role_en,
+        photo: teamPhotoUrl(m.photo_path) ?? undefined
+      }))
+    : teamData[lang].map((p, i) => ({ name: p.name, role: p.role, photo: teamPhotos[i] as string | undefined }));
   const activeEntry = combinedTimeline[Math.min(activeMilestone, combinedTimeline.length - 1)];
   const goMilestone = (next: number) => {
     const len = combinedTimeline.length;
@@ -1920,9 +2544,9 @@ export default function App() {
         <div className="fm-app">
           <aside className="fm-sidebar" aria-label="Fund manager navigation">
             <div className="fm-sidebar-brand">
-              <img src="/assets/ubam-logo.png" alt="UB Asset Management logo" />
+              <img src="/assets/logo.png" alt="UB Asset Management logo" />
               <div>
-                <p className="fm-sidebar-brand-name">Улаанбаатар Ассет Менежмент ҮЦК ХХК</p>
+                <p className="fm-sidebar-brand-name">Улаанбаатар Ассет Менежмент ХХК</p>
               </div>
             </div>
 
@@ -1979,6 +2603,10 @@ export default function App() {
             </header>
 
             <main className="fm-content">
+              {role === "general_admin" ? (
+                <AdminPanel lang={lang} section={activeFundTab as AdminSection} />
+              ) : (
+                <>
               {activeFundTab === "nav" ? (
                 <>
                   <div className="fm-nav-row">
@@ -1987,8 +2615,16 @@ export default function App() {
                         <p className="fm-nav-banner-label">{t("internal.nav.todayLabel")}</p>
                         <p className="fm-nav-banner-date">{latestNav.date}</p>
                         <p className="fm-nav-banner-value">
-                          {fundCalc.navPerUnit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MNT
+                          {liveFund.navPerUnit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MNT
                         </p>
+                        {livePriceCount > 0 ? (
+                          <p className="fm-nav-banner-live">
+                            <span className="status-dot" />
+                            {lang === "mn"
+                              ? `${livePriceCount} позиц зах зээлийн үнээр (Finnhub)`
+                              : `${livePriceCount} positions priced live (Finnhub)`}
+                          </p>
+                        ) : null}
                       </div>
                       <div className="fm-nav-banner-actions">
                         <span className={`fm-nav-banner-pill ${isTodayApproved ? "published" : "draft"}`}>
@@ -2021,12 +2657,12 @@ export default function App() {
                       <h2>{t("internal.nav.breakdownTitle")}</h2>
                     </header>
                     {(() => {
-                      const stocksTotalMnt = fundInputs.equities
+                      const stocksTotalMnt = liveFund.equities
                         .filter((e) => e.type !== "Option")
-                        .reduce((s, e) => s + (e.mcapMnt ?? 0), 0);
-                      const optionsTotalMnt = fundInputs.equities
+                        .reduce((s, e) => s + e.liveMcapMnt, 0);
+                      const optionsTotalMnt = liveFund.equities
                         .filter((e) => e.type === "Option")
-                        .reduce((s, e) => s + (e.mcapMnt ?? 0), 0);
+                        .reduce((s, e) => s + e.liveMcapMnt, 0);
                       return (
                     <ul className="fm-breakdown">
                       <li>
@@ -2039,28 +2675,28 @@ export default function App() {
                       </li>
                       <li>
                         <span>{t("internal.nav.brBonds")}</span>
-                        <strong>{formatNav(fundCalc.totalBonds)}</strong>
+                        <strong>{formatNav(liveFund.totalBonds)}</strong>
                       </li>
                       <li>
                         <span>{t("internal.nav.brCash")}</span>
-                        <strong>{formatNav(fundCalc.totalCash)}</strong>
+                        <strong>{formatNav(liveFund.totalCash)}</strong>
                       </li>
                       <li className="negative">
                         <span>{t("internal.nav.brLiabilities")}</span>
-                        <strong>−{formatNav(fundCalc.liabilities)}</strong>
+                        <strong>−{formatNav(liveFund.liabilities)}</strong>
                       </li>
                       <li className="total">
                         <span>{t("internal.nav.brNet")}</span>
-                        <strong>{formatNav(fundCalc.netAssets)}</strong>
+                        <strong>{formatNav(liveFund.netAssets)}</strong>
                       </li>
                       <li className="subtle">
                         <span>{t("internal.nav.brUnits")}</span>
-                        <strong>{fundCalc.totalUnits.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                        <strong>{liveFund.totalUnits.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                       </li>
                       <li className="total">
                         <span>{t("internal.nav.brPerUnit")}</span>
                         <strong>
-                          {fundCalc.navPerUnit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MNT
+                          {liveFund.navPerUnit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MNT
                         </strong>
                       </li>
                     </ul>
@@ -3734,7 +4370,8 @@ export default function App() {
                 </div>
               ) : null}
 
-              {activeFundTab === "reports" ? <ReportsAdmin lang={lang} /> : null}
+                </>
+              )}
             </main>
           </div>
 
@@ -4044,9 +4681,9 @@ export default function App() {
         <header className="site-header">
           <div className="container header-wrap">
             <a className="brand" href={`/?lang=${lang}`}>
-              <img src="/assets/ubam-logo.png" alt="UB Asset Management logo" />
+              <img src="/assets/logo.png" alt="UB Asset Management logo" />
               <div>
-                <p className="brand-name">Улаанбаатар Ассет Менежмент ҮЦК ХХК</p>
+                <p className="brand-name">Улаанбаатар Ассет Менежмент ХХК</p>
                 <p className="brand-sub">{t("internal.brand")}</p>
               </div>
             </a>
@@ -4089,27 +4726,50 @@ export default function App() {
     <div className="app">
       <header className="site-header" id="home">
         <div className="container header-wrap">
-          <a className="brand" href="#home">
-            <img src="/assets/ubam-logo.png" alt="UB Asset Management logo" />
-            <div>
-              <p className="brand-name">Улаанбаатар Ассет Менежмент ХХК</p>
-            </div>
+          <a
+            className="brand"
+            href="#home"
+            onClick={(event) => {
+              event.preventDefault();
+              setPage("home");
+            }}
+          >
+            <img src="/assets/logo.png" alt="UB Asset Management logo" />
           </a>
 
           <nav className="main-nav">
-            <a href="#about">{t("nav.about")}</a>
-            <a href="#team">{t("nav.team")}</a>
-            <a href="#timeline">{t("nav.timeline")}</a>
-            <a href="#financials">{t("nav.financials")}</a>
+            <button
+              type="button"
+              className={`main-nav-link${page === "about" ? " active" : ""}`}
+              onClick={() => setPage("about")}
+            >
+              {t("nav.about")}
+            </button>
+            <button
+              type="button"
+              className={`main-nav-link${page === "funds" ? " active" : ""}`}
+              onClick={() => setPage("funds")}
+            >
+              {t("nav.funds")}
+            </button>
+            <button
+              type="button"
+              className={`main-nav-link${page === "reports" ? " active" : ""}`}
+              onClick={() => setPage("reports")}
+            >
+              {t("nav.financials")}
+            </button>
           </nav>
 
           <div className="header-actions">
             <button className="btn btn-ghost" type="button" onClick={onToggleLang}>
               {lang === "mn" ? "EN" : "MN"}
             </button>
-            <button className="btn btn-accent" type="button" onClick={() => setLoginOpen(true)}>
-              {t("auth.login")}
-            </button>
+            {!PUBLIC_ONLY ? (
+              <button className="btn btn-accent" type="button" onClick={() => setLoginOpen(true)}>
+                {t("auth.login")}
+              </button>
+            ) : null}
           </div>
         </div>
       </header>
@@ -4133,33 +4793,85 @@ export default function App() {
         </div>
       </section>
 
-      <nav className="side-nav" aria-label="Section navigation">
-        {sideNavSections.map((s) => (
-          <a
-            key={s.id}
-            href={`#${s.id}`}
-            className={`side-nav-item${activeSection === s.id ? " active" : ""}`}
-          >
-            <span className="side-nav-label">{t(s.key)}</span>
-            <span className="side-nav-dot" aria-hidden="true" />
-          </a>
-        ))}
-      </nav>
+      <main className={page === "home" ? undefined : "page-bg"}>
+        {page === "home" ? (
+          <>
+            <section className="hero" id="hero">
+              <div className="hero-overlay" />
+              <div className="container hero-content">
+                <h1>
+                  Улаанбаатар
+                  <br />
+                  Ассет Менежмент ХХК
+                </h1>
+                <p>{t("hero.body")}</p>
+              </div>
+            </section>
 
-      <main>
-        <section className="hero" id="hero">
-          <div className="hero-overlay" />
-          <div className="container hero-content">
-            <h1>
-              Улаанбаатар
-              <br />
-              Ассет Менежмент ХХК
-            </h1>
-          </div>
-        </section>
+            <section className="section home-value">
+              <div className="container">
+                <div className="value-top">
+                  <FeaturedGlobe lang={lang} />
+                  <div className="value-text">
+                    <h2 className="value-title">{t("value.title")}</h2>
+                    <p className="value-intro">{t("value.intro")}</p>
+                    <p className="asset-label">{t("value.assets")}</p>
+                    <ul className="asset-chips">
+                      <li>{t("asset.global")}</li>
+                      <li>{t("asset.domestic")}</li>
+                      <li>{t("asset.bonds")}</li>
+                      <li>{t("asset.realestate")}</li>
+                    </ul>
+                  </div>
+                </div>
 
+                <div className="value-cards">
+                  <article className="value-card">
+                    <span className="value-icon" aria-hidden="true">
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M3 12h18" />
+                        <path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z" />
+                      </svg>
+                    </span>
+                    <h3 className="value-card-title">{t("value.c1.t")}</h3>
+                    <p className="value-card-text">{t("value.c1.d")}</p>
+                  </article>
+
+                  <article className="value-card">
+                    <span className="value-icon" aria-hidden="true">
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z" />
+                        <path d="m9 12 2 2 4-4" />
+                      </svg>
+                    </span>
+                    <h3 className="value-card-title">{t("value.c2.t")}</h3>
+                    <p className="value-card-text">{t("value.c2.d")}</p>
+                  </article>
+
+                  <article className="value-card">
+                    <span className="value-icon" aria-hidden="true">
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 17 9 11l4 4 8-8" />
+                        <path d="M21 3v6h-6" />
+                      </svg>
+                    </span>
+                    <h3 className="value-card-title">{t("value.c3.t")}</h3>
+                    <p className="value-card-text">{t("value.c3.d")}</p>
+                  </article>
+                </div>
+              </div>
+            </section>
+          </>
+        ) : null}
+
+        {page === "about" ? (
+          <>
         <section className="section" id="about">
           <div className="container">
+            <div className="section-head">
+              <h2 className="section-title">{t("about.title")}</h2>
+            </div>
             <div className="about-carousel">
               <div className="about-viewport" ref={aboutViewportRef}>
                 <div
@@ -4207,22 +4919,7 @@ export default function App() {
           </div>
         </section>
 
-        <section className="section" id="team">
-          <div className="container">
-            <h2 className="section-title">{t("team.title")}</h2>
-            <div className="team-grid">
-              {teamData[lang].map((person, index) => (
-                <article className="member-card" key={`${person.name}-${person.role}`}>
-                  <MemberAvatar name={person.name} photo={teamPhotos[index]} />
-                  <p className="member-name">{person.name}</p>
-                  <p className="member-role">{person.role}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="section section-soft" id="timeline">
+        <section className="section" id="timeline">
           <div className="container">
             <div className="ht-head">
               <h2 className="section-title">{t("timeline.title")}</h2>
@@ -4271,13 +4968,146 @@ export default function App() {
           </div>
         </section>
 
+        <section className="section" id="team">
+          <div className="container">
+            <h2 className="section-title">{t("team.title")}</h2>
+            <div className="team-grid">
+              {teamMembers.map((person, index) => (
+                <article className="member-card" key={`${person.name}-${index}`}>
+                  <MemberAvatar name={person.name} photo={person.photo} />
+                  <p className="member-name">{person.name}</p>
+                  <p className="member-role">{person.role}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+          </>
+        ) : null}
+
+        {page === "funds" ? (
+          <section className="section" id="funds">
+            <div className="container">
+              <div className="fund-picker" ref={fundPickerRef}>
+                <button
+                  type="button"
+                  className="fund-select"
+                  aria-haspopup="listbox"
+                  aria-expanded={fundMenuOpen}
+                  onClick={() => setFundMenuOpen((open) => !open)}
+                >
+                  <span>{lang === "mn" ? FUNDS[fundIdx].nameMn : FUNDS[fundIdx].nameEn}</span>
+                  <svg
+                    className={`fund-chevron${fundMenuOpen ? " open" : ""}`}
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
+                {fundMenuOpen ? (
+                  <ul className="fund-menu" role="listbox">
+                    {FUNDS.map((f, i) => (
+                      <li key={f.id} role="option" aria-selected={i === fundIdx}>
+                        <button
+                          type="button"
+                          className={`fund-menu-item${i === fundIdx ? " active" : ""}`}
+                          onClick={() => {
+                            setFundIdx(i);
+                            setFundMenuOpen(false);
+                          }}
+                        >
+                          {lang === "mn" ? f.nameMn : f.nameEn}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+
+              <div className="fund-overview">
+                <article className="fund-overview-card">
+                  <h3 className="fund-name">
+                    {lang === "mn" ? FUNDS[fundIdx].nameMn : FUNDS[fundIdx].nameEn}
+                  </h3>
+                  {FUNDS[fundIdx].tagMn ? (
+                    <p className="fund-tag">
+                      {lang === "mn" ? FUNDS[fundIdx].tagMn : FUNDS[fundIdx].tagEn}
+                    </p>
+                  ) : null}
+
+                  {FUNDS[fundIdx].comingSoon ? (
+                    <p className="fund-coming-soon">
+                      {lang === "mn" ? "Тун удахгүй..." : "Coming soon..."}
+                    </p>
+                  ) : null}
+
+                  {(FUNDS[fundIdx].sections ?? []).map((s, si) => (
+                    <div className="fund-section" key={si}>
+                      <h4 className="fund-section-title">
+                        {lang === "mn" ? s.headingMn : s.headingEn}
+                      </h4>
+                      {(lang === "mn" ? s.bodyMn : s.bodyEn).map((para, pi) => (
+                        <p className="fund-section-text" key={pi}>
+                          {para}
+                        </p>
+                      ))}
+                    </div>
+                  ))}
+                </article>
+              </div>
+
+              {FUNDS[fundIdx].committee ? (
+                <div className="fund-committee">
+                  <h3 className="fund-committee-title">{t("funds.committee")}</h3>
+                  <div className="committee-grid">
+                    {FUNDS[fundIdx].committee!.map((m, i) => (
+                      <article className="member-card" key={i}>
+                        <MemberAvatar name={lang === "mn" ? m.nameMn : m.nameEn} photo={m.photo} />
+                        <p className="member-name">{lang === "mn" ? m.nameMn : m.nameEn}</p>
+                        <p className="member-role">{lang === "mn" ? m.roleMn : m.roleEn}</p>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        {page === "reports" ? (
         <section className="section" id="financials">
           <div className="container">
-            <h2 className="section-title">{t("nav.financials")}</h2>
+            <div className="report-search">
+              <svg className="report-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+              <input
+                type="search"
+                className="report-search-input"
+                value={reportQuery}
+                onChange={(event) => setReportQuery(event.target.value)}
+                placeholder={lang === "mn" ? "Хайх" : "Search"}
+                aria-label={lang === "mn" ? "Хайх" : "Search"}
+              />
+            </div>
             <div className="reports-grid">
               {displayReportGroups.map((group, groupIndex) => (
                 <div className="report-group" key={`report-group-${groupIndex}`}>
                   <h3 className="report-group-title">{group.title}</h3>
+                  {group.items.length === 0 ? (
+                    <p className="report-empty">
+                      {lang === "mn" ? "Одоогоор баримт байхгүй." : "No documents yet."}
+                    </p>
+                  ) : null}
                   <ul className="report-list">
                     {group.items.map((item, itemIndex) => (
                       <li key={`report-${groupIndex}-${itemIndex}`}>
@@ -4325,30 +5155,54 @@ export default function App() {
             </div>
           </div>
         </section>
+        ) : null}
 
-        <section className="section" id="contact">
-          <div className="container contact-grid">
-            <div>
-              <h2 className="section-title">{t("contact.title")}</h2>
-              <p className="contact-item">{t("contact.company")}</p>
-              <p className="contact-item">+976-7011-2606</p>
-              <p className="contact-item">info@ubam.mn</p>
-              <p className="contact-item">{t("contact.address")}</p>
-            </div>
-            <div>
-              <iframe
-                title="UBAM location"
-                src="https://maps.google.com/maps?q=Park%20Place%2C%20Chinggis%20Ave%2C%20Ulaanbaatar&t=&z=13&ie=UTF8&iwloc=&output=embed"
-                loading="lazy"
-              />
-            </div>
-          </div>
-        </section>
       </main>
 
-      <footer className="site-footer">
+      <footer className="site-footer" id="site-footer">
         <div className="container footer-wrap">
-          <p>{t("footer.copy")}</p>
+          <div className="footer-brand">
+            <span className="footer-logo">
+              <img src="/assets/ubam-logo.png" alt="UB Asset Management logo" />
+            </span>
+            <span className="footer-brand-name">
+              {liveContact ? (lang === "mn" ? liveContact.company_mn : liveContact.company_en) : t("contact.company")}
+            </span>
+          </div>
+
+          <a className="footer-contact" href={`tel:${(liveContact?.phone || "+976-7011-2606").replace(/[^+\d]/g, "")}`}>
+            <span className="footer-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
+              </svg>
+            </span>
+            <span>{liveContact?.phone || "+976-7011-2606"}</span>
+          </a>
+
+          <a className="footer-contact" href={`mailto:${liveContact?.email || "info@ubam.mn"}`}>
+            <span className="footer-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="4" width="20" height="16" rx="2" />
+                <path d="m22 7-10 6L2 7" />
+              </svg>
+            </span>
+            <span>{liveContact?.email || "info@ubam.mn"}</span>
+          </a>
+
+          <div className="footer-contact">
+            <span className="footer-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+            </span>
+            <span>
+              {liveContact ? (lang === "mn" ? liveContact.address_mn : liveContact.address_en) : t("contact.address")}
+            </span>
+          </div>
+        </div>
+        <div className="footer-copy">
+          <div className="container">{t("footer.copy")}</div>
         </div>
       </footer>
 

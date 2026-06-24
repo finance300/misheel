@@ -98,6 +98,29 @@ function compute(asOf?: string) {
 export const fundCalc = compute();
 export { compute as recomputeFund };
 
+export type LiveEquity = RawEquity & { livePrice: number; liveMcapMnt: number; isLive: boolean };
+
+// Recompute the whole NAV using live price overrides (by ticker) where available.
+export function computeFund(priceOverrides: Record<string, number> = {}, asOf?: string) {
+  const equities: LiveEquity[] = equitiesRaw.map((e) => {
+    const override = priceOverrides[e.ticker];
+    const isLive = typeof override === "number" && override > 0;
+    const livePrice = isLive ? override : e.price ?? 0;
+    const liveMcapMnt = fxToMnt(e.currency, (e.qty ?? 0) * livePrice * contractSize(e.type));
+    return { ...e, livePrice, liveMcapMnt, isLive };
+  });
+  const totalEquities = equities.reduce((s, e) => s + e.liveMcapMnt, 0);
+  const totalBonds = bondsRaw.reduce((sum, b) => sum + bondTotalValue(b, asOf), 0);
+  const totalCash = cashRaw
+    .filter((c) => c.label !== "Total Cash Value")
+    .reduce((sum, c) => sum + fxToMnt(c.currency, c.amount ?? 0), 0);
+  const liabilities = fundNav.liabilities.total;
+  const netAssets = totalEquities + totalBonds + totalCash - liabilities;
+  const totalUnits = fundNav.summary.totalUnits ?? 1;
+  const navPerUnit = netAssets / totalUnits;
+  return { equities, totalEquities, totalBonds, totalCash, liabilities, netAssets, totalUnits, navPerUnit };
+}
+
 export const fundInputs = {
   fxRates,
   equities: equitiesRaw,

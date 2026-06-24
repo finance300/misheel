@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
 
-export const REPORT_GROUPS = ["activity", "audit", "regulations"] as const;
+export const REPORT_GROUPS = ["tailan", "bodlogo", "juram", "udirdamj"] as const;
 export type ReportGroupKey = (typeof REPORT_GROUPS)[number];
 
 export type ReportRecord = {
