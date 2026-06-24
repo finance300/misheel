@@ -16,18 +16,12 @@ import {
   type ChartRange,
   type ChartSeries,
   type CryptoStat,
-  fetchPrices,
   fetchQuotes,
   fetchBoMRates,
-  fetchChanges,
-  fetchCrypto,
-  fetchSpxSeries,
   bomRatesFallback,
   isMarketConfigured
 } from "./lib/market";
 import {
-  REPORT_GROUPS,
-  type ReportGroupKey,
   type ReportRecord,
   listReports,
   reportFileUrl
@@ -37,34 +31,24 @@ import {
   type HomeCard,
   type TeamMember,
   type TimelineEvent,
+  type Fund,
+  type ReportCategory,
+  DEFAULT_FUNDS,
+  DEFAULT_REPORT_CATEGORIES,
   getContact,
+  getFunds,
+  getReportCategories,
   listHomeCards,
   listTeamMembers,
   listTimelineEvents,
   teamPhotoUrl
 } from "./lib/cms";
-import { computeFund, fundCalc, fundInputs } from "./data/fund-calc";
-import fundTrades from "./data/fund-trades.json";
-import fundBanks from "./data/fund-banks.json";
-import fundInvestorSubscriptions from "./data/fund-investor-subscriptions.json";
-import fundTradeSummary from "./data/fund-trade-summary.json";
 
 type Lang = "mn" | "en";
 type Page = "home" | "about" | "funds" | "reports";
 type Role = "board_member" | "fund_manager" | "general_admin";
-type FundManagerTab =
-  | "nav"
-  | "portfolio"
-  | "trades"
-  | "bank"
-  | "new_trades"
-  | "users"
-  | "reports"
-  | "settings"
-  | "mission"
-  | "team"
-  | "timeline"
-  | "contact";
+// Admin dashboard sidebar sections (this build is admin-only).
+type FundManagerTab = "about" | "funds" | "reports" | "settings";
 
 type InvestorSubscription = {
   no: number | null;
@@ -174,8 +158,8 @@ const translations: Record<Lang, TranslationMap> = {
     "about.intro": "Биднийг хөтөлж буй алсын хараа, эрхэм зорилго, үнэт зүйлс.",
     "team.eyebrow": "Манай хүмүүс",
     "timeline.eyebrow": "Түүхэн замнал",
-    "value.title": "Дэлхийн зах зээлд, мэргэжлийн түвшинд",
-    "value.intro": "Бид Монголын хөрөнгө оруулагчдад олон улсын зах зээлд институцийн түвшний хүртээмжийг нээж өгдөг.",
+    "value.title": "Бид хаана хөрөнгө оруулдаг вэ",
+    "value.intro": "Олон улсын болон дотоодын зах зээлд, төрөлжсөн хөрөнгийн ангиллаар хөрөнгө оруулна.",
     "value.c1.t": "Олон улсын зах зээл",
     "value.c1.d": "Хойд Америк, Европ, Азийн тэргүүлэх биржүүдэд хөрөнгө оруулна.",
     "value.c2.t": "Мэргэжлийн удирдлага",
@@ -187,6 +171,10 @@ const translations: Record<Lang, TranslationMap> = {
     "asset.domestic": "Дотоодын хувьцаа",
     "asset.bonds": "Бонд",
     "asset.realestate": "Үл хөдлөх хөрөнгө",
+    "asset.global.d": "Хойд Америк, Европ, Азийн тэргүүлэх биржүүдийн хувьцаа.",
+    "asset.domestic.d": "Монголын хөрөнгийн биржид бүртгэлтэй компаниудын хувьцаа.",
+    "asset.bonds.d": "Тогтвортой, тогтмол орлого бүхий өрийн хэрэгсэл.",
+    "asset.realestate.d": "Монгол дахь үл хөдлөх хөрөнгийн хөрөнгө оруулалт.",
     "markets.title": "Зах зээлийн тойм",
     "markets.asia": "Азийн зах зээл",
     "markets.us": "АНУ-ын зах зээл",
@@ -515,8 +503,8 @@ const translations: Record<Lang, TranslationMap> = {
     "about.intro": "The vision, mission and values that guide everything we do.",
     "team.eyebrow": "Our people",
     "timeline.eyebrow": "Our journey",
-    "value.title": "The world's markets, professionally managed",
-    "value.intro": "We open institutional-grade access to international markets for Mongolian investors.",
+    "value.title": "What we invest in",
+    "value.intro": "Across international and domestic markets, diversified by asset class.",
     "value.c1.t": "Global markets",
     "value.c1.d": "Investing across leading exchanges in North America, Europe and Asia.",
     "value.c2.t": "Professional management",
@@ -524,10 +512,14 @@ const translations: Record<Lang, TranslationMap> = {
     "value.c3.t": "Borderless access",
     "value.c3.d": "Direct access to global markets for domestic investors.",
     "value.assets": "Invest across",
-    "asset.global": "Global stocks",
+    "asset.global": "International stocks",
     "asset.domestic": "Domestic stocks",
     "asset.bonds": "Bonds",
     "asset.realestate": "Real estate",
+    "asset.global.d": "Equities on leading exchanges in North America, Europe and Asia.",
+    "asset.domestic.d": "Shares of companies listed on the Mongolian Stock Exchange.",
+    "asset.bonds.d": "Fixed-income instruments with stable, predictable returns.",
+    "asset.realestate.d": "Real estate investments here in Mongolia.",
     "markets.title": "Market overview",
     "markets.asia": "Asian markets",
     "markets.us": "US markets",
@@ -946,29 +938,201 @@ const fmtPrice = (n: number) =>
 // Dependency-free CSS 3D wireframe globe — the "borderless / global markets"
 // hero of the market overview, replacing the featured chart.
 const GLOBE_MERIDIANS = [0, 20, 40, 60, 80, 100, 120, 140, 160];
-function FeaturedGlobe({ lang }: { lang: Lang }) {
+
+// Global stock exchanges shown as a scrolling logo strip on the home page.
+// Wordmarks for now — swap in real logo images under /assets/exchanges/ later.
+const EXCHANGES = [
+  "NYSE",
+  "NASDAQ",
+  "LSE",
+  "EURONEXT",
+  "DEUTSCHE BÖRSE",
+  "JPX",
+  "HKEX",
+  "SSE",
+  "TSX",
+  "SIX"
+];
+function SpinningGlobe() {
   return (
-    <div className="ms-card ms-globe-card">
-      <div className="globe-caption">
-        <span className="globe-kicker">
-          {lang === "mn" ? "Дэлхийн зах зээл" : "Global markets"}
-        </span>
-        <span className="globe-sub">
-          {lang === "mn" ? "Хил хязгааргүй хөрөнгө оруулалт" : "Borderless investing"}
-        </span>
+    <div className="globe-stage" aria-hidden="true">
+      <div className="globe">
+        {GLOBE_MERIDIANS.map((deg) => (
+          <span
+            key={deg}
+            className="globe-ring globe-meridian"
+            style={{ transform: `rotateY(${deg}deg)` }}
+          />
+        ))}
+        <span className="globe-ring globe-equator" />
+        <span className="globe-ring globe-lat globe-lat-n" />
+        <span className="globe-ring globe-lat globe-lat-s" />
       </div>
-      <div className="globe-stage">
-        <div className="globe">
-          {GLOBE_MERIDIANS.map((deg) => (
-            <span
-              key={deg}
-              className="globe-ring globe-meridian"
-              style={{ transform: `rotateY(${deg}deg)` }}
-            />
-          ))}
-          <span className="globe-ring globe-equator" />
-          <span className="globe-ring globe-lat globe-lat-n" />
-          <span className="globe-ring globe-lat globe-lat-s" />
+    </div>
+  );
+}
+
+// Compound-growth calculator comparing a bank deposit vs the fund, with an
+// initial lump sum plus monthly contributions. All rates are user-adjustable.
+function InterestCalculator({ lang }: { lang: Lang }) {
+  const tr = (mn: string, en: string) => (lang === "mn" ? mn : en);
+  const [initial, setInitial] = useState(10_000_000);
+  const [monthly, setMonthly] = useState(500_000);
+  const [years, setYears] = useState(10);
+  const [bankRate, setBankRate] = useState(13);
+  const [investRate, setInvestRate] = useState(18);
+  const clamp = (v: number, lo: number, hi: number) =>
+    Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : lo;
+
+  // Monthly compounding: balance grows each month, then the contribution is added.
+  const project = (annualPct: number) => {
+    const r = annualPct / 100 / 12;
+    const pts: number[] = [initial];
+    let bal = initial;
+    for (let m = 1; m <= years * 12; m++) {
+      bal = bal * (1 + r) + monthly;
+      if (m % 12 === 0) pts.push(bal);
+    }
+    return pts;
+  };
+  const bank = project(bankRate);
+  const invest = project(investRate);
+
+  const W = 1000;
+  const H = 440;
+  const pad = { t: 30, r: 26, b: 48, l: 90 };
+  const innerW = W - pad.l - pad.r;
+  const innerH = H - pad.t - pad.b;
+  const maxV = Math.max(...invest, ...bank, 1);
+  const xAt = (i: number) => pad.l + (years === 0 ? 0 : (i / years) * innerW);
+  const yAt = (v: number) => pad.t + innerH - (v / maxV) * innerH;
+  const line = (s: number[]) =>
+    s.map((v, i) => `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(1)} ${yAt(v).toFixed(1)}`).join(" ");
+  const area = (s: number[]) =>
+    `${line(s)} L ${xAt(years).toFixed(1)} ${(pad.t + innerH).toFixed(1)} L ${xAt(0).toFixed(1)} ${(pad.t + innerH).toFixed(1)} Z`;
+
+  const fmtAxis = (n: number) =>
+    n >= 1e9 ? `${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(0)}M` : `${Math.round(n / 1e3)}K`;
+  const fmtFull = (n: number) => `₮${Math.round(n).toLocaleString("en-US")}`;
+  const yTicks = Array.from({ length: 5 }, (_, i) => (maxV * i) / 4);
+  const step = Math.max(1, Math.round(years / 6));
+  const xTicks: number[] = [];
+  for (let i = 0; i <= years; i += step) xTicks.push(i);
+  if (xTicks[xTicks.length - 1] !== years) xTicks.push(years);
+
+  return (
+    <div className="calc">
+      <div className="calc-controls">
+        <label className="calc-field">
+          <span>{tr("Анхны хөрөнгө оруулалт (₮)", "Initial investment (₮)")}</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={initial.toLocaleString("en-US")}
+            onChange={(e) => setInitial(clamp(Number(e.target.value.replace(/[^\d]/g, "")), 0, 1e12))}
+          />
+        </label>
+        <label className="calc-field">
+          <span>{tr("Сар бүрийн хөрөнгө оруулалт (₮)", "Monthly investment (₮)")}</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={monthly.toLocaleString("en-US")}
+            onChange={(e) => setMonthly(clamp(Number(e.target.value.replace(/[^\d]/g, "")), 0, 1e11))}
+          />
+        </label>
+        <label className="calc-field">
+          <span>
+            {tr("Хугацаа", "Duration")}: <strong>{years}</strong> {tr("жил", "yr")}
+          </span>
+          <input
+            type="range"
+            min={1}
+            max={40}
+            value={years}
+            onChange={(e) => setYears(clamp(Number(e.target.value), 1, 40))}
+          />
+        </label>
+        <label className="calc-field">
+          <span>
+            {tr("Банкны хүү", "Bank rate")}: <strong>{bankRate}%</strong>
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={30}
+            step={0.5}
+            value={bankRate}
+            onChange={(e) => setBankRate(clamp(Number(e.target.value), 0, 30))}
+          />
+        </label>
+        <label className="calc-field">
+          <span>
+            {tr("Хөрөнгө оруулалтын өгөөж", "Investment return")}: <strong>{investRate}%</strong>
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={40}
+            step={0.5}
+            value={investRate}
+            onChange={(e) => setInvestRate(clamp(Number(e.target.value), 0, 40))}
+          />
+        </label>
+      </div>
+
+      <div className="calc-result">
+        <div className="calc-stats-row">
+          <div className="calc-stat">
+            <span className="calc-stat-label">{tr("Банк", "Bank")}</span>
+            <span className="calc-stat-value">{fmtFull(bank[bank.length - 1])}</span>
+          </div>
+          <div className="calc-stat is-highlight">
+            <span className="calc-stat-label">{tr("Хөрөнгө оруулалт", "Investment")}</span>
+            <span className="calc-stat-value">{fmtFull(invest[invest.length - 1])}</span>
+          </div>
+          <div className="calc-stat">
+            <span className="calc-stat-label">{tr("Зөрүү", "Difference")}</span>
+            <span className="calc-stat-value">
+              +{fmtFull(invest[invest.length - 1] - bank[bank.length - 1])}
+            </span>
+          </div>
+        </div>
+
+        <div className="calc-chart-col">
+          <svg className="calc-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Growth comparison chart">
+            <defs>
+              <linearGradient id="calcFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#a10112" stopOpacity="0.18" />
+                <stop offset="100%" stopColor="#a10112" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            {yTicks.map((tv, i) => (
+              <g key={i}>
+                <line x1={pad.l} y1={yAt(tv)} x2={W - pad.r} y2={yAt(tv)} stroke="#ececec" strokeWidth="1" />
+                <text x={pad.l - 10} y={yAt(tv) + 4} textAnchor="end" className="calc-axis-label">
+                  {fmtAxis(tv)}
+                </text>
+              </g>
+            ))}
+            {xTicks.map((tx, i) => (
+              <text key={i} x={xAt(tx)} y={H - 12} textAnchor="middle" className="calc-axis-label">
+                {tx}
+              </text>
+            ))}
+            <path d={area(invest)} fill="url(#calcFill)" />
+            <path d={line(bank)} fill="none" stroke="#8a8a92" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+            <path d={line(invest)} fill="none" stroke="#a10112" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+
+          <div className="calc-legend">
+            <span className="calc-legend-item">
+              <span className="calc-dot is-bank" /> {tr("Банк", "Bank")} ({bankRate}%)
+            </span>
+            <span className="calc-legend-item">
+              <span className="calc-dot is-invest" /> {tr("Хөрөнгө оруулалт", "Investment")} ({investRate}%)
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -1282,103 +1446,6 @@ const timelineData: Record<Lang, Array<{ year: string; text: string }>> = {
   ]
 };
 
-// Localized titles for the three report groups (keys match the Supabase group_key).
-const reportGroupTitles: Record<Lang, Record<ReportGroupKey, string>> = {
-  mn: { tailan: "Тайлан", bodlogo: "Бодлого", juram: "Журам", udirdamj: "Удирдамж" },
-  en: { tailan: "Reports", bodlogo: "Policy", juram: "Procedures", udirdamj: "Guidelines" }
-};
-
-// The two funds the company manages (shown via a dropdown on the Funds page).
-type CommitteeMember = {
-  nameMn: string;
-  nameEn: string;
-  roleMn: string;
-  roleEn: string;
-  photo: string;
-};
-type FundSection = { headingMn: string; headingEn: string; bodyMn: string[]; bodyEn: string[] };
-type FundInfo = {
-  id: string;
-  nameMn: string;
-  nameEn: string;
-  tagMn?: string;
-  tagEn?: string;
-  sections?: FundSection[];
-  comingSoon?: boolean;
-  committee?: CommitteeMember[];
-};
-const FUNDS: FundInfo[] = [
-  {
-    id: "misheel",
-    nameMn: "Мишээл Рийл Истэйт Фанд",
-    nameEn: "Misheel Real Estate Fund",
-    sections: [
-      {
-        headingMn: "Танилцуулга",
-        headingEn: "Overview",
-        bodyMn: [
-          "Мишээл Фанд нь олон улсын хувьцааны зах зээлд мэргэшсэн, дотоодын хөрөнгө оруулагчдад зохицуулалттай бөгөөд нэгдсэн хэрэгслээр дамжуулан дэлхийн зах зээлд гарах боломжийг олгодог хувийн хөрөнгө оруулалтын сан юм. Бид Хойд Америк, Европ, Азийн тэргүүлэх биржүүдэд хөрөнгө оруулж, урт хугацааны өсөлтийн стратегийг тактикийн уян хатан шийдвэрүүдтэй хослуулан, хөрөнгө оруулагчдынхаа үнэ цэнийг тогтвортой өсгөхийг зорьдог. Сангийн үйл ажиллагааг Санхүүгийн Зохицуулах Хорооны №380/11 тоот тусгай зөвшөөрөлтэй Улаанбаатар Ассет Менежмент ХХК мэргэжлийн түвшинд удирдан зохион байгуулдаг."
-        ],
-        bodyEn: [
-          "Misheel Fund is a private investment fund that gives qualified investors structured access to international equity markets through a single regulated vehicle. The fund invests across global exchanges — North America, Europe, and Asia — combining growth-oriented positions with selective tactical exposures, with the aim of generating long-term capital appreciation for its investors.",
-          "The fund is managed by Ulaanbaatar Asset Management LLC, regulated by the Financial Regulatory Commission of Mongolia under license №380/11."
-        ]
-      },
-      {
-        headingMn: "Хөрөнгө оруулалтын бодлого",
-        headingEn: "Investment approach",
-        bodyMn: [
-          "Бид олон улсын хувьцаа, биржээр арилжаалагддаг сан буюу ETF болон тэдгээртэй холбогдох санхүүгийн хэрэгслүүдээс бүрдсэн, салбар болон валютын өндөр төрөлжилттэй багцыг удирддаг. Хөрөнгө оруулалтын шийдвэр гаргахдаа суурь шинжилгээний гүн гүнзгий судалгаанд тулгуурлаж, техникийн шинжилгээ болон эрсдэлийн удирдлагын хатуу сахилга батыг баримталдаг."
-        ],
-        bodyEn: [
-          "The fund holds a diversified portfolio of international equities, ETFs, and related instruments across multiple sectors and currencies. Positions are taken based on fundamental conviction, supported by technical analysis and disciplined risk management."
-        ]
-      },
-      {
-        headingMn: "Бидний оршин тогтнох шалтгаан",
-        headingEn: "Why this fund exists",
-        bodyMn: [
-          "Олон улсын санхүүгийн зах зээл нь олон төрлийн бирж, валютын зөрүү, цагийн бүс болон хууль эрх зүйн ялгаатай орчныг даван туулж чадсан хөрөнгө оруулагчдад асар их боломжийг олгодог. Гэвч Монголын ихэнх хөрөнгө оруулагчдын хувьд санхүүгийн чадамжаас илүүтэйгээр олон улсын багцыг удирдах дэд бүтэц, мэргэжлийн судалгаа болон үйл ажиллагааны нарийн төвөгтэй байдал нь дэлхийн зах зээлд шууд нэвтрэхэд гол саад тотгор болдог юм.",
-          "Мишээл Фанд яг энэ орон зайг нөхдөг. Бид дотоодын хөрөнгө оруулагчдад бие даан нэвтрэхэд хүндрэлтэй дэлхийн зах зээлд институцийн түвшний хүртээмжийг олгож байна. Ингэхдээ мэргэжлийн багийн гүнзгий судалгаа, олон улсын гүйцэтгэлийн дэд бүтэц болон эрсдэлийн удирдлагын цогц системийг хамтад нь санал болгож байна."
-        ],
-        bodyEn: [
-          "International markets offer real opportunities to investors who can navigate multiple exchanges, currencies, time zones, and regulatory regimes. Most Mongolian investors cannot — not because they lack capital, but because the infrastructure, the research, and the operational complexity of running a multi-currency international book are out of reach.",
-          "Misheel Fund closes that gap. It gives Mongolian investors institutional-grade access to markets they would otherwise have to navigate alone, with the research depth, execution infrastructure, and risk discipline of a professional management team."
-        ]
-      }
-    ],
-    committee: [
-      {
-        nameMn: "Н. Монсор",
-        nameEn: "N. Monsor",
-        roleMn: "Гүйцэтгэх захирал, ТУЗ-гишүүн",
-        roleEn: "CEO, Board member",
-        photo: "/assets/team/monsor.png"
-      },
-      {
-        nameMn: "А. Уянга",
-        nameEn: "A. Uyanga",
-        roleMn: "ХОС зөвлөх",
-        roleEn: "Investment fund advisor",
-        photo: "/assets/team/uyanga.png"
-      },
-      {
-        nameMn: "А. Идэрбат",
-        nameEn: "A. Iderbat",
-        roleMn: "ХОС зөвлөх",
-        roleEn: "Investment fund advisor",
-        photo: "/assets/team/iderbat.png"
-      }
-    ]
-  },
-  {
-    id: "kk",
-    nameMn: "КК Рийл Истэйт Фанд",
-    nameEn: "KK Real Estate Fund",
-    comingSoon: true
-  }
-];
-
 // Placeholder documents shown when Supabase is not yet configured / empty.
 type ReportDoc = { name: string; href: string };
 const reportGroups: Record<Lang, Array<{ title: string; items: ReportDoc[] }>> = {
@@ -1466,33 +1533,8 @@ function asStr(v: unknown, fallback = "-"): string {
   return String(v);
 }
 
-const initialTradeConfirmations: TradeConfirmation[] = (fundTrades as Array<Record<string, unknown>>)
-  .map((row, idx) => ({
-    id: idx + 1,
-    securityType: asStr(row.securityType, "Stock"),
-    type: asStr(row.type, "BUY"),
-    currency: asStr(row.currency, "MNT"),
-    tradeDate: asStr(row.tradeDate, ""),
-    settleDate: asStr(row.settleDate, asStr(row.tradeDate, "")),
-    securityName: asStr(row.securityName, ""),
-    ticker: asStr(row.ticker, ""),
-    instrumentType: asStr(row.instrumentType, "RVP"),
-    portfolioClass: asStr(row.portfolioClass, "Equity"),
-    quantity: Number(row.quantity ?? 0),
-    unitPrice: Number(row.unitPrice ?? 0),
-    secTotal: Number(row.secTotal ?? 0),
-    feePerc: Number(row.feePerc ?? 0),
-    feeAmount: Number(row.feeAmount ?? 0),
-    fixedFee: Number(row.fixedFee ?? 0),
-    totalFee: Number(row.totalFee ?? 0),
-    total: Number(row.total ?? 0),
-    exchangeRate: asStr(row.exchangeRate, "-"),
-    totalUsd: asStr(row.totalUsd, "-"),
-    stockSplit: asStr(row.stockSplit, "-"),
-    description: asStr(row.description, "-")
-  }))
-  .filter((t) => t.ticker && t.tradeDate)
-  .sort((a, b) => (a.tradeDate < b.tradeDate ? 1 : -1));
+// Trade data is fund-internal and no longer shipped in this admin-only build.
+const initialTradeConfirmations: TradeConfirmation[] = [];
 
 function readLangFromQuery(): Lang | null {
   const params = new URLSearchParams(window.location.search);
@@ -1511,11 +1553,8 @@ function isInternalPath() {
 }
 
 function readRoleFromQuery(): Role {
-  const params = new URLSearchParams(window.location.search);
-  const role = params.get("role");
-  if (role === "fund_manager") return "fund_manager";
-  if (role === "general_admin") return "general_admin";
-  return "board_member";
+  // Only the general admin portal ships in this build.
+  return "general_admin";
 }
 
 function initials(name: string) {
@@ -1544,24 +1583,10 @@ function calculateSettleDate(tradeDate: string, lagDaysRaw: string) {
 type NavHistoryPoint = { date: string; nav: number };
 type NavApproval = { date: string; at: string; by: string };
 
-// Net Assets is recomputed live from positions/FX/liabilities — see src/data/fund-calc.ts
 const todayDateString = new Date().toISOString().slice(0, 10);
 
-// Until daily NAV history is tracked, synthesize a 7-day lead-in walking back from the live Net Assets.
-const __latestNav = fundCalc.netAssets;
-const navHistoryData: NavHistoryPoint[] = (() => {
-  const steps = [-0.0058, -0.0021, 0.0014, -0.0009, 0.0023, 0.0017, 0.0034];
-  const today = new Date();
-  const lead: NavHistoryPoint[] = [];
-  let v = __latestNav;
-  for (let i = steps.length - 1; i >= 0; i--) {
-    v = v / (1 + steps[i]);
-    const d = new Date(today);
-    d.setDate(today.getDate() - (steps.length - i));
-    lead.unshift({ date: d.toISOString().slice(0, 10), nav: Math.round(v) });
-  }
-  return [...lead, { date: todayDateString, nav: Math.round(__latestNav) }];
-})();
+// NAV figures are fund-internal and no longer shipped in this admin-only build.
+const navHistoryData: NavHistoryPoint[] = [];
 
 function NavChart({ data }: { data: NavHistoryPoint[] }) {
   const width = 820;
@@ -1712,69 +1737,6 @@ const fundManagersDirectory: FundManagerUser[] = [
   }
 ];
 
-function tabIcon(id: FundManagerTab): ReactElement {
-  const common = {
-    width: 18,
-    height: 18,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.8,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const
-  };
-  switch (id) {
-    case "nav":
-      return (
-        <svg {...common} aria-hidden="true">
-          <path d="M4 19V5" />
-          <path d="M4 19h16" />
-          <path d="M8 15l3-4 3 3 5-7" />
-        </svg>
-      );
-    case "trades":
-      return (
-        <svg {...common} aria-hidden="true">
-          <rect x="3" y="4" width="18" height="16" rx="2" />
-          <path d="M3 10h18" />
-          <path d="M9 4v16" />
-        </svg>
-      );
-    case "new_trades":
-      return (
-        <svg {...common} aria-hidden="true">
-          <path d="M12 5v14" />
-          <path d="M5 12h14" />
-        </svg>
-      );
-    case "users":
-      return (
-        <svg {...common} aria-hidden="true">
-          <circle cx="9" cy="9" r="3.2" />
-          <path d="M3 19c0-3.3 2.7-6 6-6s6 2.7 6 6" />
-          <circle cx="17" cy="8" r="2.4" />
-          <path d="M15.5 13.4a5 5 0 0 1 5.5 4.6" />
-        </svg>
-      );
-    case "reports":
-      return (
-        <svg {...common} aria-hidden="true">
-          <path d="M14 3v5h5" />
-          <path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
-          <path d="M9 13h6" />
-          <path d="M9 17h4" />
-        </svg>
-      );
-    case "settings":
-    default:
-      return (
-        <svg {...common} aria-hidden="true">
-          <circle cx="12" cy="12" r="3" />
-          <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1A2 2 0 1 1 4.3 17l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1A2 2 0 1 1 7 4.3l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1A2 2 0 1 1 19.7 7l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
-        </svg>
-      );
-  }
-}
 
 export default function App() {
   const initialInternal = useMemo(() => isInternalPath() && !PUBLIC_ONLY, []);
@@ -1791,8 +1753,6 @@ export default function App() {
     window.scrollTo(0, 0);
   }, [page]);
   const [role] = useState<Role>(initialRole);
-  const [loginOpen, setLoginOpen] = useState(false);
-  const [pendingRole, setPendingRole] = useState<Role | null>(null);
   const [previewDoc, setPreviewDoc] = useState<ReportDoc | null>(null);
   const [liveQuotes, setLiveQuotes] = useState<Quote[] | null>(null);
   useEffect(() => {
@@ -1815,26 +1775,16 @@ export default function App() {
     liveQuotes ?? marketIndexes.map((m) => ({ label: m.name, value: m.value, change: m.change }));
   // Home-page Bank of Mongolia exchange rates (global indices come from the
   // embedded TradingView widgets).
-  // Live market prices for the fund's US-listed equities → NAV recomputes from them.
-  const [livePrices, setLivePrices] = useState<Record<string, number>>({});
-  useEffect(() => {
-    if (!initialInternal || !isMarketConfigured) return;
-    const symbols = fundInputs.equities
-      .filter((e) => e.currency === "USD" && e.type === "Stock" && /^[A-Z.]{1,6}$/.test(e.ticker))
-      .map((e) => e.ticker);
-    const load = () => fetchPrices(symbols).then(setLivePrices).catch(() => {});
-    load();
-    const id = setInterval(load, 60000);
-    return () => clearInterval(id);
-  }, []);
-  const liveFund = computeFund(livePrices);
-  const livePriceCount = Object.keys(livePrices).length;
   const [liveReports, setLiveReports] = useState<ReportRecord[] | null>(null);
+  const [liveReportCategories, setLiveReportCategories] = useState<ReportCategory[] | null>(null);
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     listReports()
       .then(setLiveReports)
       .catch(() => setLiveReports(null));
+    getReportCategories()
+      .then((c) => c && c.length && setLiveReportCategories(c))
+      .catch(() => {});
   }, []);
   // Show live documents from Supabase when available; otherwise the built-in placeholders.
   // Only real uploaded documents — no placeholders. Empty groups show an empty state.
@@ -1854,10 +1804,11 @@ export default function App() {
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, [fundMenuOpen]);
-  const displayReportGroups = REPORT_GROUPS.map((key) => ({
-    title: reportGroupTitles[lang][key],
+  const reportCats = liveReportCategories ?? DEFAULT_REPORT_CATEGORIES;
+  const displayReportGroups = reportCats.map((cat) => ({
+    title: lang === "mn" ? cat.title_mn : cat.title_en,
     items: (liveReports ?? [])
-      .filter((r) => r.group_key === key)
+      .filter((r) => r.group_key === cat.key)
       .filter((r) => !reportNeedle || r.title.toLowerCase().includes(reportNeedle))
       .map((r) => ({ name: r.title, href: reportFileUrl(r.file_path) }))
   }));
@@ -1867,17 +1818,27 @@ export default function App() {
   const [liveTeam, setLiveTeam] = useState<TeamMember[] | null>(null);
   const [liveTimeline, setLiveTimeline] = useState<TimelineEvent[] | null>(null);
   const [liveContact, setLiveContact] = useState<ContactInfo | null>(null);
+  const [liveFunds, setLiveFunds] = useState<Fund[] | null>(null);
   useEffect(() => {
     if (!isSupabaseConfigured || initialInternal) return;
     listHomeCards().then((d) => d.length && setLiveCards(d)).catch(() => {});
     listTeamMembers().then((d) => d.length && setLiveTeam(d)).catch(() => {});
     listTimelineEvents().then((d) => d.length && setLiveTimeline(d)).catch(() => {});
     getContact().then((c) => c && setLiveContact(c)).catch(() => {});
+    getFunds().then((d) => d && d.length && setLiveFunds(d)).catch(() => {});
+  }, []);
+  // Funds shown on the public Funds page: live CMS content, else the built-in defaults.
+  const funds = liveFunds ?? DEFAULT_FUNDS;
+  const activeFund = funds[Math.min(fundIdx, funds.length - 1)] ?? funds[0];
+  // Bank of Mongolia exchange rates for the home page.
+  const [bomRates, setBomRates] = useState<FxRate[]>(bomRatesFallback());
+  useEffect(() => {
+    if (initialInternal) return;
+    fetchBoMRates().then(setBomRates).catch(() => {});
   }, []);
 
-  const [activeFundTab, setActiveFundTab] = useState<FundManagerTab>(
-    initialRole === "general_admin" ? "mission" : "nav"
-  );
+
+  const [activeFundTab, setActiveFundTab] = useState<FundManagerTab>("about");
   const [tradeEntryOpen, setTradeEntryOpen] = useState(false);
   const [proposals, setProposals] = useState<Proposal[]>(initialProposals);
   const [tradeConfirmations, setTradeConfirmations] = useState<TradeConfirmation[]>(initialTradeConfirmations);
@@ -2117,22 +2078,10 @@ export default function App() {
     realizedPnLPct: number;
   };
 
-  const tickerSplitMap = useMemo(() => {
-    const m = new Map<string, { total: number; afterSplit: number }>();
-    for (const s of fundTradeSummary as Array<{
-      currency: string | null;
-      ticker: string | null;
-      total: number | null;
-      totalAfterSplit: number | null;
-    }>) {
-      if (!s.ticker || s.total == null || s.totalAfterSplit == null) continue;
-      m.set(`${s.currency ?? "MNT"}|${s.ticker.trim()}`, {
-        total: s.total,
-        afterSplit: s.totalAfterSplit
-      });
-    }
-    return m;
-  }, []);
+  const tickerSplitMap = useMemo(
+    () => new Map<string, { total: number; afterSplit: number }>(),
+    []
+  );
 
   const tickerSummaries = useMemo<TickerSummary[]>(() => {
     const byTicker = new Map<string, TradeConfirmation[]>();
@@ -2273,25 +2222,12 @@ export default function App() {
       {path}
     </svg>
   );
-  const fundManagerTabs: Array<{ id: FundManagerTab; label: string; icon: ReactElement }> =
-    role === "general_admin"
-      ? [
-          { id: "mission", label: lang === "mn" ? "Зорилго & Үнэт зүйлс" : "Mission & Values", icon: adminIcon(<><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4" /><circle cx="12" cy="12" r="0.6" fill="currentColor" /></>) },
-          { id: "team", label: lang === "mn" ? "Менежментийн баг" : "Management team", icon: tabIcon("users") },
-          { id: "timeline", label: lang === "mn" ? "Он цагийн хэлхээс" : "Timeline", icon: adminIcon(<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>) },
-          { id: "reports", label: lang === "mn" ? "Тайлан & Журам" : "Reports", icon: tabIcon("reports") },
-          { id: "contact", label: lang === "mn" ? "Холбоо барих" : "Contact", icon: adminIcon(<><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></>) },
-          { id: "users", label: lang === "mn" ? "Хэрэглэгчид" : "Users", icon: adminIcon(<><circle cx="12" cy="8" r="3.2" /><path d="M5 20c0-3.3 3-6 7-6s7 2.7 7 6" /></>) }
-        ]
-      : [
-          { id: "nav", label: t("internal.fmTabs.nav"), icon: tabIcon("nav") },
-          { id: "portfolio", label: t("internal.fmTabs.portfolio"), icon: tabIcon("portfolio") },
-          { id: "trades", label: t("internal.fmTabs.trades"), icon: tabIcon("trades") },
-          { id: "bank", label: t("internal.fmTabs.bank"), icon: tabIcon("bank") },
-          { id: "new_trades", label: t("internal.fmTabs.newTrades"), icon: tabIcon("new_trades") },
-          { id: "users", label: t("internal.fmTabs.users"), icon: tabIcon("users") },
-          { id: "settings", label: t("internal.fmTabs.settings"), icon: tabIcon("settings") }
-        ];
+  const fundManagerTabs: Array<{ id: FundManagerTab; label: string; icon: ReactElement }> = [
+    { id: "about", label: lang === "mn" ? "Бидний тухай" : "About us", icon: adminIcon(<><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4" /><circle cx="12" cy="12" r="0.6" fill="currentColor" /></>) },
+    { id: "funds", label: lang === "mn" ? "Хөрөнгө оруулалтын сан" : "Investment funds", icon: adminIcon(<><path d="M4 20V4" /><path d="M4 20h16" /><rect x="7" y="12" width="3" height="5" /><rect x="13" y="8" width="3" height="9" /></>) },
+    { id: "reports", label: lang === "mn" ? "Тайлан & Журам" : "Reports & Regulations", icon: adminIcon(<><path d="M14 3v5h5" /><path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" /><path d="M9 13h6" /><path d="M9 17h4" /></>) },
+    { id: "settings", label: lang === "mn" ? "Ерөнхий тохиргоо" : "General settings", icon: adminIcon(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 7.4 19.4l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 13.8H4.5a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 6.4 8.4l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 12 4.6V4.5a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 12h.1a2 2 0 0 1 0 4h-.1Z" /></>) }
+  ];
   const aboutCards = liveCards
     ? liveCards.map((c) => ({
         title: lang === "mn" ? c.title_mn : c.title_en,
@@ -2354,25 +2290,6 @@ export default function App() {
     const next = lang === "mn" ? "en" : "mn";
     setLang(next);
     localStorage.setItem("lang", next);
-  };
-
-  const toInternal = (selectedRole: Role, fund?: string) => {
-    const fundParam = fund ? `&fund=${fund}` : "";
-    window.location.href = `/internal?role=${selectedRole}&lang=${lang}${fundParam}`;
-  };
-  // Funds the user can manage. Today there's just one (Misheel); the picker scales to more.
-  const funds = [{ id: "misheel", name: lang === "mn" ? "Мишээл сан" : "Misheel Fund" }];
-  const chooseRole = (selectedRole: Role) => {
-    // The general admin manages reports, not a specific fund — skip fund selection.
-    if (selectedRole === "general_admin") {
-      toInternal(selectedRole);
-    } else {
-      setPendingRole(selectedRole);
-    }
-  };
-  const closeLogin = () => {
-    setLoginOpen(false);
-    setPendingRole(null);
   };
 
   const [activeMilestone, setActiveMilestone] = useState(0);
@@ -2509,2215 +2426,60 @@ export default function App() {
   };
 
   if (initialInternal) {
-    const selectedRoleLabel =
-      role === "fund_manager" ? t("role.fund") : role === "general_admin" ? t("role.admin") : t("role.board");
-
-    if (role === "fund_manager" || role === "general_admin") {
-      const currentUser = fundManagersDirectory[1];
-      const activeUsers = fundManagersDirectory.filter((u) => u.status === "active").length;
-      const invitedUsers = fundManagersDirectory.filter((u) => u.status === "invited").length;
-      const latestNav = navHistoryData[navHistoryData.length - 1];
-      const formatNav = (n: number) =>
-        `${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MNT`;
-      const fmt2 = (n: number) =>
-        n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      const fmt2Str = (s: string | null | undefined) => {
-        if (s == null || s === "-" || s === "") return s ?? "—";
-        const n = Number(s);
-        return Number.isFinite(n) ? fmt2(n) : s;
-      };
-      const buildStamp = () => {
-        const stamp = new Date();
-        const hh = stamp.getHours().toString().padStart(2, "0");
-        const mm = stamp.getMinutes().toString().padStart(2, "0");
-        return `${latestNav.date} ${hh}:${mm}`;
-      };
-      const approveTodayNav = () => {
-        setNavApproval({
-          date: latestNav.date,
-          at: buildStamp(),
-          by: currentUser.name
-        });
-      };
-      const isTodayApproved = navApproval?.date === latestNav.date;
-      return (
-        <div className="fm-app">
-          <aside className="fm-sidebar" aria-label="Fund manager navigation">
-            <div className="fm-sidebar-brand">
-              <img src="/assets/logo.png" alt="UB Asset Management logo" />
-              <div>
-                <p className="fm-sidebar-brand-name">Улаанбаатар Ассет Менежмент ХХК</p>
-              </div>
+    return (
+      <div className="fm-app">
+        <aside className="fm-sidebar" aria-label="Admin navigation">
+          <div className="fm-sidebar-brand">
+            <img src="/assets/logo.png" alt="UB Asset Management logo" />
+            <div>
+              <p className="fm-sidebar-brand-name">Улаанбаатар Ассет Менежмент ХХК</p>
             </div>
-
-            <nav className="fm-sidebar-nav">
-              {fundManagerTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  className={`fm-sidebar-item ${activeFundTab === tab.id ? "active" : ""}`}
-                  onClick={() => setActiveFundTab(tab.id)}
-                >
-                  <span>{tab.label}</span>
-                </button>
-              ))}
-            </nav>
-
-            <div className="fm-sidebar-footer">
-              {role !== "general_admin" ? (
-                <div className="fm-sidebar-user">
-                  <div className="fm-sidebar-avatar">{initials(currentUser.name)}</div>
-                  <div className="fm-sidebar-user-meta">
-                    <p className="fm-sidebar-user-name">{currentUser.name}</p>
-                    <p className="fm-sidebar-user-email">{currentUser.email}</p>
-                  </div>
-                </div>
-              ) : null}
-              <div className="fm-sidebar-actions">
-                <button
-                  type="button"
-                  className="fm-sidebar-action"
-                  onClick={onToggleLang}
-                  aria-label="Toggle language"
-                >
-                  {lang === "mn" ? "EN" : "MN"}
-                </button>
-                <a className="fm-sidebar-action" href={`/?lang=${lang}`}>
-                  {t("internal.fmSidebar.signout")}
-                </a>
-              </div>
-            </div>
-          </aside>
-
-          <div className="fm-main">
-            <header className="fm-topbar">
-              <div>
-                <h1 className="fm-topbar-title">
-                  {fundManagerTabs.find((tab) => tab.id === activeFundTab)?.label ??
-                    t("internal.fmTabs.nav")}
-                </h1>
-              </div>
-              <div className="fm-topbar-role">
-                <span className="fm-topbar-role-label">{selectedRoleLabel}</span>
-              </div>
-            </header>
-
-            <main className="fm-content">
-              {role === "general_admin" ? (
-                <AdminPanel lang={lang} section={activeFundTab as AdminSection} />
-              ) : (
-                <>
-              {activeFundTab === "nav" ? (
-                <>
-                  <div className="fm-nav-row">
-                    <section className={`fm-nav-banner ${isTodayApproved ? "is-approved" : ""}`}>
-                      <div className="fm-nav-banner-info">
-                        <p className="fm-nav-banner-label">{t("internal.nav.todayLabel")}</p>
-                        <p className="fm-nav-banner-date">{latestNav.date}</p>
-                        <p className="fm-nav-banner-value">
-                          {liveFund.navPerUnit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MNT
-                        </p>
-                        {livePriceCount > 0 ? (
-                          <p className="fm-nav-banner-live">
-                            <span className="status-dot" />
-                            {lang === "mn"
-                              ? `${livePriceCount} позиц зах зээлийн үнээр (Finnhub)`
-                              : `${livePriceCount} positions priced live (Finnhub)`}
-                          </p>
-                        ) : null}
-                      </div>
-                      <div className="fm-nav-banner-actions">
-                        <span className={`fm-nav-banner-pill ${isTodayApproved ? "published" : "draft"}`}>
-                          <span className="status-dot" />
-                          {isTodayApproved ? t("internal.nav.statusPublished") : t("internal.nav.statusDraft")}
-                        </span>
-                      </div>
-                    </section>
-                    {!isTodayApproved ? (
-                      <button
-                        type="button"
-                        className="fm-nav-outside-btn approve"
-                        onClick={approveTodayNav}
-                      >
-                        {t("internal.nav.approveBtn")}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="fm-nav-outside-btn ghost"
-                        onClick={() => setNavApproval(null)}
-                      >
-                        {t("internal.nav.unpublishBtn")}
-                      </button>
-                    )}
-                  </div>
-
-                  <section className="fm-card">
-                    <header className="fm-card-head">
-                      <h2>{t("internal.nav.breakdownTitle")}</h2>
-                    </header>
-                    {(() => {
-                      const stocksTotalMnt = liveFund.equities
-                        .filter((e) => e.type !== "Option")
-                        .reduce((s, e) => s + e.liveMcapMnt, 0);
-                      const optionsTotalMnt = liveFund.equities
-                        .filter((e) => e.type === "Option")
-                        .reduce((s, e) => s + e.liveMcapMnt, 0);
-                      return (
-                    <ul className="fm-breakdown">
-                      <li>
-                        <span>{t("internal.nav.brEquities")}</span>
-                        <strong>{formatNav(stocksTotalMnt)}</strong>
-                      </li>
-                      <li>
-                        <span>{t("internal.nav.brOptions")}</span>
-                        <strong>{formatNav(optionsTotalMnt)}</strong>
-                      </li>
-                      <li>
-                        <span>{t("internal.nav.brBonds")}</span>
-                        <strong>{formatNav(liveFund.totalBonds)}</strong>
-                      </li>
-                      <li>
-                        <span>{t("internal.nav.brCash")}</span>
-                        <strong>{formatNav(liveFund.totalCash)}</strong>
-                      </li>
-                      <li className="negative">
-                        <span>{t("internal.nav.brLiabilities")}</span>
-                        <strong>−{formatNav(liveFund.liabilities)}</strong>
-                      </li>
-                      <li className="total">
-                        <span>{t("internal.nav.brNet")}</span>
-                        <strong>{formatNav(liveFund.netAssets)}</strong>
-                      </li>
-                      <li className="subtle">
-                        <span>{t("internal.nav.brUnits")}</span>
-                        <strong>{liveFund.totalUnits.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
-                      </li>
-                      <li className="total">
-                        <span>{t("internal.nav.brPerUnit")}</span>
-                        <strong>
-                          {liveFund.navPerUnit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MNT
-                        </strong>
-                      </li>
-                    </ul>
-                      );
-                    })()}
-                  </section>
-
-                  <section className="fm-card">
-                    <header className="fm-card-head">
-                      <h2>{t("internal.nav.trendTitle")}</h2>
-                      <p className="fm-card-sub">{t("internal.nav.trendSub")}</p>
-                    </header>
-                    <div className="fm-chart-wrap">
-                      <NavChart data={navHistoryData} />
-                    </div>
-                  </section>
-                </>
-              ) : null}
-
-              {activeFundTab === "portfolio" ? (
-                <>
-                  <section className="fm-card">
-                    <header className="fm-card-head">
-                      <h2>{t("internal.portfolio.fxTitle")}</h2>
-                    </header>
-                    <div className="fm-fx-grid">
-                      {Object.entries(fundInputs.fxRates)
-                        .filter(([cur]) => cur !== "MNT")
-                        .map(([cur, rate]) => (
-                        <article key={cur} className="fm-fx-card">
-                          <p className="fm-fx-currency">{cur}</p>
-                          <strong className="fm-fx-rate">
-                            {rate.toLocaleString("en-US", { maximumFractionDigits: 4 })}
-                          </strong>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="fm-card">
-                    <header className="fm-card-head">
-                      <h2>{t("internal.portfolio.cashTitle")}</h2>
-                    </header>
-                    <div className="fm-table-wrap">
-                      <table className="fm-table">
-                        <thead>
-                          <tr>
-                            <th>{t("internal.portfolio.colName")}</th>
-                            <th>{t("internal.portfolio.colCurrency")}</th>
-                            <th style={{ textAlign: "right" }}>{t("internal.portfolio.colAmount")}</th>
-                            <th style={{ textAlign: "right" }}>{t("internal.portfolio.colMntValue")}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {fundInputs.cash
-                            .filter((c) => c.label !== "Total Cash Value")
-                            .map((c) => {
-                              const negative = (c.mntValue ?? 0) < 0;
-                              return (
-                                <tr key={c.label}>
-                                  <td>{c.label}</td>
-                                  <td>{c.currency}</td>
-                                  <td style={{ textAlign: "right" }}>
-                                    {(c.amount ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}
-                                  </td>
-                                  <td
-                                    style={{ textAlign: "right" }}
-                                    className={negative ? "cell-down" : undefined}
-                                  >
-                                    {(c.mntValue ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })} MNT
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          <tr className="fm-row-total">
-                            <td colSpan={3}>{t("internal.nav.brCash")}</td>
-                            <td style={{ textAlign: "right" }}>
-                              {fundCalc.totalCash.toLocaleString("en-US", { maximumFractionDigits: 2 })} MNT
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </section>
-
-                  {(() => {
-                    const todayDate = new Date().toISOString().slice(0, 10);
-                    const userBondRows = addedBonds.map((b) => {
-                      const initial = new Date(b.purchaseDate).getTime();
-                      const days = (new Date(todayDate).getTime() - initial) / 86_400_000;
-                      const accrued = b.value * b.yield * (Math.max(0, days) / 365);
-                      const total = b.value + accrued + b.purchaseInterest;
-                      return {
-                        ticker: b.ticker,
-                        name: b.name,
-                        qty: b.qty,
-                        costBasis: b.value,
-                        yield: b.yield,
-                        initialDate: b.purchaseDate,
-                        calcDate: todayDate,
-                        interestAmount: accrued,
-                        totalValue: total,
-                        custom: true
-                      };
-                    });
-                    const userBondsTotal = userBondRows.reduce((s, b) => s + b.totalValue, 0);
-                    const liveTotalBonds = fundCalc.totalBonds + userBondsTotal;
-                    const liveNetAssets = fundCalc.netAssets + userBondsTotal;
-                    return (
-                      <section className="fm-card">
-                        <header className="fm-card-head">
-                          <h2>{t("internal.portfolio.bondsTitle")}</h2>
-                        </header>
-                        <div className="fm-table-wrap">
-                          <table className="fm-table">
-                            <thead>
-                              <tr>
-                                <th>{t("internal.portfolio.colTicker")}</th>
-                                <th style={{ textAlign: "right" }}>{t("internal.portfolio.colQty")}</th>
-                                <th style={{ textAlign: "right" }}>{t("internal.portfolio.colCost")}</th>
-                                <th style={{ textAlign: "right" }}>{t("internal.portfolio.colYield")}</th>
-                                <th>{t("internal.portfolio.colStart")}</th>
-                                <th>{t("internal.portfolio.colCalc")}</th>
-                                <th style={{ textAlign: "right" }}>{t("internal.portfolio.colAccrued")}</th>
-                                <th style={{ textAlign: "right" }}>{t("internal.portfolio.colTotalValue")}</th>
-                                <th style={{ textAlign: "right" }}>{t("internal.portfolio.colAllocation")}</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {fundInputs.bonds.map((b) => {
-                                const allocation = liveNetAssets > 0 ? (b.totalValue ?? 0) / liveNetAssets : 0;
-                                return (
-                                  <tr key={b.ticker}>
-                                    <td>{b.ticker}</td>
-                                    <td style={{ textAlign: "right" }}>
-                                      {(b.qty ?? 0).toLocaleString("en-US")}
-                                    </td>
-                                    <td style={{ textAlign: "right" }}>
-                                      {(b.costBasis ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                                    </td>
-                                    <td style={{ textAlign: "right" }}>
-                                      {((b.yield ?? 0) * 100).toFixed(2)}%
-                                    </td>
-                                    <td>{b.initialDate ?? "—"}</td>
-                                    <td>{b.calcDate ?? "—"}</td>
-                                    <td style={{ textAlign: "right" }}>
-                                      {(b.interestAmount ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                                    </td>
-                                    <td style={{ textAlign: "right" }}>
-                                      <strong>
-                                        {(b.totalValue ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                                      </strong>
-                                    </td>
-                                    <td style={{ textAlign: "right" }}>{(allocation * 100).toFixed(2)}%</td>
-                                  </tr>
-                                );
-                              })}
-                              {userBondRows.map((b, i) => {
-                                const allocation = liveNetAssets > 0 ? b.totalValue / liveNetAssets : 0;
-                                return (
-                                  <tr key={`added-${i}-${b.ticker}`} className="fm-row-added">
-                                    <td>
-                                      <strong>{b.ticker}</strong>
-                                      <br />
-                                      <span className="fm-row-added-name">{b.name}</span>
-                                    </td>
-                                    <td style={{ textAlign: "right" }}>{b.qty.toLocaleString("en-US")}</td>
-                                    <td style={{ textAlign: "right" }}>
-                                      {b.costBasis.toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                                    </td>
-                                    <td style={{ textAlign: "right" }}>{(b.yield * 100).toFixed(2)}%</td>
-                                    <td>{b.initialDate}</td>
-                                    <td>{b.calcDate}</td>
-                                    <td style={{ textAlign: "right" }}>
-                                      {b.interestAmount.toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                                    </td>
-                                    <td style={{ textAlign: "right" }}>
-                                      <strong>{b.totalValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}</strong>
-                                    </td>
-                                    <td style={{ textAlign: "right" }}>{(allocation * 100).toFixed(2)}%</td>
-                                  </tr>
-                                );
-                              })}
-                              <tr className="fm-row-total">
-                                <td colSpan={7}>{t("internal.nav.brBonds")}</td>
-                                <td style={{ textAlign: "right" }}>
-                                  {liveTotalBonds.toLocaleString("en-US", { maximumFractionDigits: 0 })} MNT
-                                </td>
-                                <td style={{ textAlign: "right" }}>
-                                  {((liveTotalBonds / liveNetAssets) * 100).toFixed(2)}%
-                                </td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-                      </section>
-                    );
-                  })()}
-
-                  {(() => {
-                    const stocks = fundInputs.equities.filter((e) => e.type !== "Option");
-                    const options = fundInputs.equities.filter((e) => e.type === "Option");
-                    const currencyOrder = ["USD", "AUD", "EUR", "CAD", "HKD", "MNT"];
-                    const stocksByCurrency = new Map<string, typeof stocks>();
-                    for (const s of stocks) {
-                      const cur = s.currency || "MNT";
-                      const list = stocksByCurrency.get(cur) ?? [];
-                      list.push(s);
-                      stocksByCurrency.set(cur, list);
-                    }
-                    const orderedStockCurrencies = [
-                      ...currencyOrder.filter((c) => stocksByCurrency.has(c)),
-                      ...[...stocksByCurrency.keys()].filter((c) => !currencyOrder.includes(c))
-                    ];
-
-                    const renderEquityRow = (e: typeof stocks[number]) => {
-                      const pnl = e.unrealizedPnL ?? 0;
-                      const pnlPct = e.unrealizedPnLPct ?? 0;
-                      const positive = pnl >= 0;
-                      return (
-                        <tr key={e.ticker}>
-                          <td>
-                            <strong>{e.ticker}</strong>
-                          </td>
-                          <td style={{ textAlign: "right" }}>
-                            {(e.qty ?? 0).toLocaleString("en-US", { maximumFractionDigits: 4 })}
-                          </td>
-                          <td style={{ textAlign: "right" }}>
-                            {(e.avgPrice ?? 0).toLocaleString("en-US", { maximumFractionDigits: 4 })}
-                          </td>
-                          <td style={{ textAlign: "right" }}>
-                            {(e.price ?? 0).toLocaleString("en-US", { maximumFractionDigits: 4 })}
-                          </td>
-                          <td style={{ textAlign: "right" }}>
-                            {(e.mcap ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}
-                          </td>
-                          <td style={{ textAlign: "right" }}>
-                            <strong>
-                              {(e.mcapMnt ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                            </strong>
-                          </td>
-                          <td
-                            style={{ textAlign: "right" }}
-                            className={positive ? "cell-up" : "cell-down"}
-                          >
-                            {positive ? "+" : ""}
-                            {pnl.toLocaleString("en-US", { maximumFractionDigits: 2 })}
-                            <br />
-                            <span style={{ fontSize: "0.74rem", opacity: 0.85 }}>
-                              ({positive ? "+" : ""}
-                              {(pnlPct * 100).toFixed(2)}%)
-                            </span>
-                          </td>
-                          <td style={{ textAlign: "right" }}>
-                            <button type="button" className="fm-row-edit-btn" aria-label={t("internal.portfolio.edit")}>
-                              {t("internal.portfolio.edit")}
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    };
-
-                    return (
-                      <>
-                        <section className="fm-card">
-                          <header className="fm-card-head">
-                            <h2>{t("internal.portfolio.stocksTitle")}</h2>
-                          </header>
-                          <div className="fm-trade-groups">
-                            {orderedStockCurrencies.map((currency) => {
-                              const list = stocksByCurrency.get(currency) ?? [];
-                              const sorted = [...list].sort((a, b) => (b.mcapMnt ?? 0) - (a.mcapMnt ?? 0));
-                              const groupTotalMnt = sorted.reduce((s, e) => s + (e.mcapMnt ?? 0), 0);
-                              return (
-                                <section className="fm-currency-group" key={currency}>
-                                  <header className="fm-currency-header">
-                                    <h3>{currency}</h3>
-                                    <span>{sorted.length} {sorted.length === 1 ? "stock" : "stocks"}</span>
-                                  </header>
-                                  <div className="fm-table-wrap">
-                                    <table className="fm-table">
-                                      <thead>
-                                        <tr>
-                                          <th>{t("internal.portfolio.colTicker")}</th>
-                                          <th style={{ textAlign: "right" }}>{t("internal.portfolio.colQty")}</th>
-                                          <th style={{ textAlign: "right" }}>{t("internal.portfolio.colAvgPrice")}</th>
-                                          <th style={{ textAlign: "right" }}>{t("internal.portfolio.colPrice")}</th>
-                                          <th style={{ textAlign: "right" }}>{t("internal.portfolio.colMcap")}</th>
-                                          <th style={{ textAlign: "right" }}>{t("internal.portfolio.colMcapMnt")}</th>
-                                          <th style={{ textAlign: "right" }}>{t("internal.portfolio.colPnL")}</th>
-                                          <th style={{ textAlign: "right" }}>{t("internal.portfolio.edit")}</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {sorted.map(renderEquityRow)}
-                                        <tr className="fm-row-total">
-                                          <td colSpan={5}>{currency} subtotal</td>
-                                          <td style={{ textAlign: "right" }}>
-                                            {groupTotalMnt.toLocaleString("en-US", { maximumFractionDigits: 0 })} MNT
-                                          </td>
-                                          <td />
-                                          <td />
-                                        </tr>
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                </section>
-                              );
-                            })}
-                          </div>
-                        </section>
-
-                        {options.length ? (
-                          <section className="fm-card">
-                            <header className="fm-card-head">
-                              <h2>{t("internal.portfolio.optionsTitle")}</h2>
-                            </header>
-                            <div className="fm-table-wrap">
-                              <table className="fm-table">
-                                <thead>
-                                  <tr>
-                                    <th>{t("internal.portfolio.colTicker")}</th>
-                                    <th>{t("internal.portfolio.colCurrency")}</th>
-                                    <th style={{ textAlign: "right" }}>{t("internal.portfolio.colQty")}</th>
-                                    <th style={{ textAlign: "right" }}>{t("internal.portfolio.colAvgPrice")}</th>
-                                    <th style={{ textAlign: "right" }}>{t("internal.portfolio.colPrice")}</th>
-                                    <th style={{ textAlign: "right" }}>{t("internal.portfolio.colMcap")}</th>
-                                    <th style={{ textAlign: "right" }}>{t("internal.portfolio.colMcapMnt")}</th>
-                                    <th style={{ textAlign: "right" }}>{t("internal.portfolio.colPnL")}</th>
-                                    <th style={{ textAlign: "right" }}>{t("internal.portfolio.edit")}</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {[...options]
-                                    .sort((a, b) => (b.mcapMnt ?? 0) - (a.mcapMnt ?? 0))
-                                    .map((e) => {
-                                      const pnl = e.unrealizedPnL ?? 0;
-                                      const pnlPct = e.unrealizedPnLPct ?? 0;
-                                      const positive = pnl >= 0;
-                                      return (
-                                        <tr key={e.ticker}>
-                                          <td>
-                                            <strong>{e.ticker}</strong>
-                                          </td>
-                                          <td>{e.currency}</td>
-                                          <td style={{ textAlign: "right" }}>
-                                            {(e.qty ?? 0).toLocaleString("en-US")}
-                                          </td>
-                                          <td style={{ textAlign: "right" }}>
-                                            {(e.avgPrice ?? 0).toLocaleString("en-US", { maximumFractionDigits: 4 })}
-                                          </td>
-                                          <td style={{ textAlign: "right" }}>
-                                            {(e.price ?? 0).toLocaleString("en-US", { maximumFractionDigits: 4 })}
-                                          </td>
-                                          <td style={{ textAlign: "right" }}>
-                                            {(e.mcap ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}
-                                          </td>
-                                          <td style={{ textAlign: "right" }}>
-                                            <strong>
-                                              {(e.mcapMnt ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                                            </strong>
-                                          </td>
-                                          <td
-                                            style={{ textAlign: "right" }}
-                                            className={positive ? "cell-up" : "cell-down"}
-                                          >
-                                            {positive ? "+" : ""}
-                                            {pnl.toLocaleString("en-US", { maximumFractionDigits: 2 })}
-                                            <br />
-                                            <span style={{ fontSize: "0.74rem", opacity: 0.85 }}>
-                                              ({positive ? "+" : ""}
-                                              {(pnlPct * 100).toFixed(2)}%)
-                                            </span>
-                                          </td>
-                                          <td style={{ textAlign: "right" }}>
-                                            <button
-                                              type="button"
-                                              className="fm-row-edit-btn"
-                                              aria-label={t("internal.portfolio.edit")}
-                                            >
-                                              {t("internal.portfolio.edit")}
-                                            </button>
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
-                                  {(() => {
-                                    const optionsTotalMnt = options.reduce(
-                                      (s, e) => s + (e.mcapMnt ?? 0),
-                                      0
-                                    );
-                                    return (
-                                      <tr className="fm-row-total">
-                                        <td colSpan={6}>{t("internal.portfolio.optionsTitle")} subtotal</td>
-                                        <td style={{ textAlign: "right" }}>
-                                          {optionsTotalMnt.toLocaleString("en-US", { maximumFractionDigits: 0 })} MNT
-                                        </td>
-                                        <td />
-                                        <td />
-                                      </tr>
-                                    );
-                                  })()}
-                                </tbody>
-                              </table>
-                            </div>
-                          </section>
-                        ) : null}
-                      </>
-                    );
-                  })()}
-                </>
-              ) : null}
-
-              {activeFundTab === "trades" ? (
-                <div className="fm-trades-layout">
-                  <div className="fm-trade-actions">
-                    <input
-                      ref={tradeFileInputRef}
-                      type="file"
-                      accept=".xlsx,.xls"
-                      style={{ display: "none" }}
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (file) onImportTrades(file);
-                        if (tradeFileInputRef.current) tradeFileInputRef.current.value = "";
-                      }}
-                    />
-                    {importStatus ? (
-                      <span className="fm-import-status">{importStatus}</span>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="btn btn-accent"
-                      onClick={() => setStockAddChoiceOpen(true)}
-                    >
-                      + {t("internal.trades.stockAdd")}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-accent"
-                      onClick={() => setBondFormOpen(true)}
-                    >
-                      + {t("internal.portfolio.bondAdd")}
-                    </button>
-                  </div>
-                  {tradeEntryOpen ? (
-                    <div
-                      className="modal"
-                      onClick={(event) =>
-                        event.target === event.currentTarget && setTradeEntryOpen(false)
-                      }
-                    >
-                      <div className="modal-card fm-trade-modal">
-                        <h3>{t("internal.trades.entryTitle")}</h3>
-                        <form onSubmit={onSubmitTradeConfirmation}>
-                          <div className="fm-field-grid">
-                                  <label className="fm-field">
-                                    <span>Security type</span>
-                                    <select
-                                      value={tradeForm.securityType}
-                                      onChange={(event) => {
-                                        const next = event.target.value;
-                                        setTradeForm((current) => ({
-                                          ...current,
-                                          securityType: next,
-                                          portfolioClass: next === "Option" ? "Option" : "Equity"
-                                        }));
-                                      }}
-                                    >
-                                      <option value="Stock">Stock</option>
-                                      <option value="Option">Option</option>
-                                    </select>
-                                  </label>
-
-                                  <label className="fm-field">
-                                    <span>TYPE</span>
-                                    <select
-                                      value={tradeForm.type}
-                                      onChange={(event) => setTradeForm((current) => ({ ...current, type: event.target.value }))}
-                                    >
-                                      <option value="BUY">BUY</option>
-                                      <option value="SELL">SELL</option>
-                                    </select>
-                                  </label>
-
-                                  <label className="fm-field">
-                                    <span>Currency</span>
-                                    <select
-                                      value={tradeForm.currency}
-                                      onChange={(event) => setTradeForm((current) => ({ ...current, currency: event.target.value }))}
-                                    >
-                                      {Object.keys(fundInputs.fxRates).map((cur) => (
-                                        <option key={cur} value={cur}>{cur}</option>
-                                      ))}
-                                    </select>
-                                  </label>
-
-                                  <label className="fm-field">
-                                    <span>Date - trade</span>
-                                    <input
-                                      type="date"
-                                      value={tradeForm.tradeDate}
-                                      onChange={(event) =>
-                                        setTradeForm((current) => ({ ...current, tradeDate: event.target.value }))
-                                      }
-                                      required
-                                    />
-                                  </label>
-
-                                  <label className="fm-field">
-                                    <span>Date - settle</span>
-                                    <input type="date" value={currentSettleDate} readOnly />
-                                  </label>
-
-
-                                  <label className="fm-field">
-                                    <span>Security name</span>
-                                    <input
-                                      value={tradeForm.securityName}
-                                      onChange={(event) =>
-                                        setTradeForm((current) => ({ ...current, securityName: event.target.value }))
-                                      }
-                                      required
-                                    />
-                                  </label>
-
-                                  <label className="fm-field">
-                                    <span>Ticker</span>
-                                    <input
-                                      value={tradeForm.ticker}
-                                      onChange={(event) => setTradeForm((current) => ({ ...current, ticker: event.target.value }))}
-                                      required
-                                    />
-                                  </label>
-
-                                  <label className="fm-field">
-                                    <span>Inst. Type</span>
-                                    <input
-                                      value={tradeForm.instrumentType}
-                                      onChange={(event) =>
-                                        setTradeForm((current) => ({ ...current, instrumentType: event.target.value }))
-                                      }
-                                      required
-                                    />
-                                  </label>
-
-
-                                  <label className="fm-field">
-                                    <span>Quantity</span>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      step="any"
-                                      value={tradeForm.quantity}
-                                      onChange={(event) =>
-                                        setTradeForm((current) => ({ ...current, quantity: event.target.value }))
-                                      }
-                                      required
-                                    />
-                                  </label>
-
-                                  <label className="fm-field">
-                                    <span>Unit price</span>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      step="any"
-                                      value={tradeForm.unitPrice}
-                                      onChange={(event) =>
-                                        setTradeForm((current) => ({ ...current, unitPrice: event.target.value }))
-                                      }
-                                      required
-                                    />
-                                  </label>
-
-                                  <label className="fm-field">
-                                    <span>Fee perc.</span>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      step="0.000001"
-                                      value={tradeForm.feePerc}
-                                      onChange={(event) =>
-                                        setTradeForm((current) => ({ ...current, feePerc: event.target.value }))
-                                      }
-                                      required
-                                    />
-                                  </label>
-
-                                  <label className="fm-field">
-                                    <span>Fixed fee</span>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      step="any"
-                                      value={tradeForm.fixedFee}
-                                      onChange={(event) =>
-                                        setTradeForm((current) => ({ ...current, fixedFee: event.target.value }))
-                                      }
-                                      required
-                                    />
-                                  </label>
-
-                                  <label className="fm-field">
-                                    <span>Exchange rate</span>
-                                    <input
-                                      value={tradeForm.exchangeRate}
-                                      onChange={(event) =>
-                                        setTradeForm((current) => ({ ...current, exchangeRate: event.target.value }))
-                                      }
-                                    />
-                                  </label>
-
-
-                          </div>
-
-                          <div className="fm-card-actions">
-                            <button
-                              type="button"
-                              className="btn btn-ghost"
-                              onClick={() => setTradeEntryOpen(false)}
-                            >
-                              {t("internal.trades.preview.cancel")}
-                            </button>
-                            <button className="btn btn-accent" type="submit">
-                              {t("internal.trades.submit")}
-                            </button>
-                          </div>
-                        </form>
-                      </div>
-                    </div>
-                  ) : null}
-
-                          <div className="fm-segment">
-                            <button
-                              type="button"
-                              className={`fm-segment-btn ${tradesSegment === "active" ? "active" : ""}`}
-                              onClick={() => setTradesSegment("active")}
-                            >
-                              {t("internal.trades.segActive")}
-                              <span className="fm-segment-count">
-                                {openPositionGroups.reduce((s, g) => s + g.tickers.length, 0)}
-                              </span>
-                            </button>
-                            <button
-                              type="button"
-                              className={`fm-segment-btn ${tradesSegment === "inactive" ? "active" : ""}`}
-                              onClick={() => setTradesSegment("inactive")}
-                            >
-                              {t("internal.trades.segInactive")}
-                              <span className="fm-segment-count">{closedPositions.length}</span>
-                            </button>
-                          </div>
-
-                          {tradesSegment === "inactive" ? (
-                            <div className="fm-stats fm-stats-pnl">
-                              {closedPnLByCurrency.map(({ currency, pnl, count }) => {
-                                const positive = pnl >= 0;
-                                return (
-                                  <article className="fm-stat-card" key={currency}>
-                                    <p>
-                                      {currency}{" "}
-                                      <span className="fm-stat-sub">
-                                        · {count} {count === 1 ? "stock" : "stocks"}
-                                      </span>
-                                    </p>
-                                    <strong className={positive ? "cell-up" : "cell-down"}>
-                                      {positive ? "+" : ""}
-                                      {pnl.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
-                                      <span className="fm-stat-cur">{currency}</span>
-                                    </strong>
-                                  </article>
-                                );
-                              })}
-                            </div>
-                          ) : null}
-
-                          <section className="fm-card">
-                            {tradesSegment === "active" ? (
-                              openPositionGroups.length ? (
-                              <div className="fm-trade-groups">
-                                {openPositionGroups.map(({ currency, tickers }) => (
-                                  <section className="fm-currency-group" key={currency}>
-                                    <header className="fm-currency-header">
-                                      <h3>{currency}</h3>
-                                      <span>{tickers.length} {tickers.length === 1 ? "stock" : "stocks"}</span>
-                                    </header>
-                                    <div className="fm-ticker-list">
-                                      {tickers.map(({ ticker, trades, netQty, securityName }) => {
-                                        const key = `${currency}:${ticker}`;
-                                        const open = expandedTickers.has(key);
-                                        const splitInfo = tickerSplitMap.get(`${currency}|${ticker}`);
-                                        const hasSplit =
-                                          splitInfo != null &&
-                                          Math.abs(splitInfo.total - splitInfo.afterSplit) > 0.001;
-                                        const displayShares = hasSplit ? splitInfo!.afterSplit : netQty;
-                                        return (
-                                          <div key={ticker} className={`fm-ticker-card ${open ? "open" : ""}`}>
-                                            <div className="fm-ticker-row">
-                                              <button
-                                                type="button"
-                                                className="fm-ticker-toggle"
-                                                onClick={() => toggleTicker(key)}
-                                                aria-expanded={open}
-                                              >
-                                                <span className="fm-ticker-arrow" aria-hidden="true">
-                                                  ▸
-                                                </span>
-                                                <span className="fm-ticker-symbol">{ticker}</span>
-                                                <span className="fm-ticker-name">{securityName}</span>
-                                                <span className="fm-ticker-net">
-                                                  {displayShares.toLocaleString("en-US", {
-                                                    maximumFractionDigits: 4
-                                                  })}{" "}
-                                                  shares
-                                                  {hasSplit ? (
-                                                    <span className="fm-ticker-split">
-                                                      {" "}
-                                                      (was {splitInfo!.total.toLocaleString("en-US")} pre-split)
-                                                    </span>
-                                                  ) : null}
-                                                </span>
-                                                <span className="fm-ticker-count">
-                                                  {trades.length} {trades.length === 1 ? "trade" : "trades"}
-                                                </span>
-                                              </button>
-                                              <button
-                                                type="button"
-                                                className="fm-ticker-split-btn"
-                                                onClick={() => {
-                                                  setSplitTicker({ currency, ticker });
-                                                  setSplitForm({ newShares: "", oldShares: "" });
-                                                }}
-                                                title={t("internal.trades.splitModal.title")}
-                                              >
-                                                ⇄ {t("internal.trades.splitBtn")}
-                                              </button>
-                                            </div>
-                                            {open ? (
-                                              <div className="fm-ticker-detail">
-                                                <div className="fm-table-wrap">
-                                                  <table className="fm-table fm-trade-detail-table">
-                                                    <thead>
-                                                      <tr>
-                                                        <th>Date</th>
-                                                        <th>Type</th>
-                                                        <th>Shares</th>
-                                                        <th>@ Price</th>
-                                                        <th>SEC value</th>
-                                                        <th>Total fees</th>
-                                                        <th>Total</th>
-                                                        <th>FX</th>
-                                                        <th>Total USD</th>
-                                                      </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                      {trades.map((tr) => (
-                                                        <tr key={tr.id}>
-                                                          <td>{tr.tradeDate}</td>
-                                                          <td>
-                                                            <span className={`trade-type ${tr.type.toLowerCase()}`}>
-                                                              {tr.type}
-                                                            </span>
-                                                          </td>
-                                                          <td>{fmt2(tr.quantity)}</td>
-                                                          <td>{fmt2(tr.unitPrice)}</td>
-                                                          <td>{fmt2(tr.secTotal)}</td>
-                                                          <td>{fmt2(tr.totalFee)}</td>
-                                                          <td>{fmt2(tr.total)}</td>
-                                                          <td>{fmt2Str(tr.exchangeRate)}</td>
-                                                          <td>{fmt2Str(tr.totalUsd)}</td>
-                                                        </tr>
-                                                      ))}
-                                                    </tbody>
-                                                  </table>
-                                                </div>
-                                              </div>
-                                            ) : null}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </section>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="fm-empty">{t("internal.trades.empty")}</p>
-                            )
-                            ) : closedPositionGroups.length ? (
-                              <div className="fm-trade-groups">
-                                {closedPositionGroups.map(({ currency, tickers }) => (
-                                  <section className="fm-currency-group" key={currency}>
-                                    <header className="fm-currency-header">
-                                      <h3>{currency}</h3>
-                                      <span>
-                                        {tickers.length} {tickers.length === 1 ? "stock" : "stocks"}
-                                      </span>
-                                    </header>
-                                    <div className="fm-ticker-list">
-                                      {tickers.map((pos) => {
-                                        const key = `closed:${currency}:${pos.ticker}`;
-                                        const open = expandedTickers.has(key);
-                                        const positive = pos.realizedPnL >= 0;
-                                        return (
-                                          <div key={pos.ticker} className={`fm-ticker-card ${open ? "open" : ""}`}>
-                                            <button
-                                              type="button"
-                                              className="fm-ticker-toggle fm-ticker-toggle-pnl"
-                                              onClick={() => toggleTicker(key)}
-                                              aria-expanded={open}
-                                            >
-                                              <span className="fm-ticker-arrow" aria-hidden="true">▸</span>
-                                              <span className="fm-ticker-symbol">{pos.ticker}</span>
-                                              <span className="fm-ticker-name">{pos.securityName}</span>
-                                              <span className="fm-ticker-count">
-                                                {pos.buyQty.toLocaleString("en-US")} shares
-                                              </span>
-                                              <span className={positive ? "fm-ticker-pnl up" : "fm-ticker-pnl down"}>
-                                                {positive ? "+" : ""}
-                                                {pos.realizedPnL.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
-                                                {pos.currency}
-                                              </span>
-                                              <span className={positive ? "fm-ticker-pnl-pct up" : "fm-ticker-pnl-pct down"}>
-                                                {positive ? "+" : ""}
-                                                {(pos.realizedPnLPct * 100).toFixed(2)}%
-                                              </span>
-                                            </button>
-                                            {open ? (
-                                              <div className="fm-ticker-detail">
-                                                <div className="fm-position-summary">
-                                                  <div>
-                                                    <p>Total cost</p>
-                                                    <strong>
-                                                      {pos.totalCost.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
-                                                      {pos.currency}
-                                                    </strong>
-                                                  </div>
-                                                  <div>
-                                                    <p>Total proceeds</p>
-                                                    <strong>
-                                                      {pos.totalProceeds.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
-                                                      {pos.currency}
-                                                    </strong>
-                                                  </div>
-                                                  <div>
-                                                    <p>Realized P&amp;L</p>
-                                                    <strong className={positive ? "cell-up" : "cell-down"}>
-                                                      {positive ? "+" : ""}
-                                                      {pos.realizedPnL.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
-                                                      {pos.currency}
-                                                    </strong>
-                                                  </div>
-                                                </div>
-                                                <div className="fm-table-wrap">
-                                                  <table className="fm-table fm-trade-detail-table">
-                                                    <thead>
-                                                      <tr>
-                                                        <th>Date</th>
-                                                        <th>Type</th>
-                                                        <th>Shares</th>
-                                                        <th>@ Price</th>
-                                                        <th>SEC value</th>
-                                                        <th>Total fees</th>
-                                                        <th>Total</th>
-                                                        <th>FX</th>
-                                                        <th>Total USD</th>
-                                                      </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                      {pos.trades.map((tr) => (
-                                                        <tr key={tr.id}>
-                                                          <td>{tr.tradeDate}</td>
-                                                          <td>
-                                                            <span className={`trade-type ${tr.type.toLowerCase()}`}>
-                                                              {tr.type}
-                                                            </span>
-                                                          </td>
-                                                          <td>{fmt2(tr.quantity)}</td>
-                                                          <td>{fmt2(tr.unitPrice)}</td>
-                                                          <td>{fmt2(tr.secTotal)}</td>
-                                                          <td>{fmt2(tr.totalFee)}</td>
-                                                          <td>{fmt2(tr.total)}</td>
-                                                          <td>{fmt2Str(tr.exchangeRate)}</td>
-                                                          <td>{fmt2Str(tr.totalUsd)}</td>
-                                                        </tr>
-                                                      ))}
-                                                    </tbody>
-                                                  </table>
-                                                </div>
-                                              </div>
-                                            ) : null}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </section>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="fm-empty">No closed positions yet.</p>
-                            )}
-                          </section>
-                        </div>
-                      ) : null}
-
-              {activeFundTab === "bank" ? (
-                <>
-                  {(() => {
-                    const allBanks = fundBanks as BankAccount[];
-                    const LEGACY_ACCOUNT = "8863";
-                    const activeBank =
-                      allBanks.find((b) => b.accountNumber === activeBankAccount) ?? allBanks[0];
-                    const typeOptions: Array<{ value: string; label: string }> = Array.from(
-                      { length: 13 },
-                      (_, i) => ({ value: String(i), label: t(`internal.bank.type.${i}`) })
-                    );
-                    return (
-                      <>
-                        <div className="fm-bank-toggle">
-                          <label className="fm-field fm-bank-select-field">
-                            <span>{t("internal.bank.account")}</span>
-                            <select
-                              value={activeBank?.accountNumber ?? ""}
-                              onChange={(event) => setActiveBankAccount(event.target.value)}
-                            >
-                              {allBanks.map((bank) => {
-                                const isLegacy = bank.accountNumber === LEGACY_ACCOUNT;
-                                return (
-                                  <option key={bank.accountNumber} value={bank.accountNumber}>
-                                    {bank.alias} · {bank.accountNumber} · {bank.currency}
-                                    {isLegacy ? ` (${t("internal.bank.legacyBadge")})` : ""}
-                                  </option>
-                                );
-                              })}
-                            </select>
-                          </label>
-                          {activeBank?.accountNumber === LEGACY_ACCOUNT ? (
-                            <span className="fm-bank-legacy-badge fm-bank-legacy-badge-inline">
-                              {t("internal.bank.legacyBadge")}
-                            </span>
-                          ) : null}
-                        </div>
-
-                        {activeBank ? (() => {
-                          const bank = activeBank;
-                          const txns = [...bank.transactions].sort((a, b) =>
-                            a.date < b.date ? 1 : -1
-                          );
-                          return (
-                            <section className="fm-card" key={bank.accountNumber}>
-                              <header className="fm-card-head fm-bank-head">
-                                <div>
-                                  <h2>
-                                    {bank.alias}
-                                    <span className="fm-bank-account-num"> · {bank.accountNumber}</span>
-                                  </h2>
-                                  <p className="fm-card-sub">
-                                    {t("internal.bank.balance")}:{" "}
-                                    <strong>
-                                      {(bank.currentBalance ?? 0).toLocaleString("en-US", {
-                                        maximumFractionDigits: 2
-                                      })}{" "}
-                                      {bank.currency}
-                                    </strong>
-                                    {bank.asOf ? (
-                                      <>
-                                        {" "}
-                                        · {t("internal.bank.asOf")} {bank.asOf.slice(0, 10)}
-                                      </>
-                                    ) : null}
-                                  </p>
-                                </div>
-                                <div className="fm-bank-head-actions">
-                                  {bankImportStatus ? (
-                                    <span className="fm-import-status">{bankImportStatus}</span>
-                                  ) : null}
-                                  <input
-                                    ref={bankFileInputRef}
-                                    type="file"
-                                    accept=".xlsx,.xls"
-                                    style={{ display: "none" }}
-                                    onChange={(event) => {
-                                      const file = event.target.files?.[0];
-                                      if (file) onBankExcelFile(file);
-                                      if (bankFileInputRef.current) bankFileInputRef.current.value = "";
-                                    }}
-                                  />
-                                  <button
-                                    type="button"
-                                    className="btn btn-accent"
-                                    onClick={() => bankFileInputRef.current?.click()}
-                                  >
-                                    + {t("internal.bank.uploadExcel")}
-                                  </button>
-                                </div>
-                              </header>
-
-                              {(() => {
-                                const totalsByCode: Record<string, { plus: number; minus: number }> = {};
-                                for (let i = 0; i < 13; i++) totalsByCode[String(i)] = { plus: 0, minus: 0 };
-                                txns.slice(0, 25).forEach((tx, idx) => {
-                                  const txKey = `${bank.accountNumber}-${idx}-${tx.date}`;
-                                  const code = bankTxnTypes[txKey];
-                                  if (!code || !(code in totalsByCode)) return;
-                                  totalsByCode[code].plus += tx.credit ?? 0;
-                                  totalsByCode[code].minus += tx.debit ?? 0;
-                                });
-                                const totalPlus = Object.values(totalsByCode).reduce(
-                                  (s, v) => s + v.plus,
-                                  0
-                                );
-                                const totalMinus = Object.values(totalsByCode).reduce(
-                                  (s, v) => s + v.minus,
-                                  0
-                                );
-                                const balance = bank.currentBalance ?? 0;
-                                const fmt = (n: number) =>
-                                  n.toLocaleString("en-US", {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2
-                                  });
-                                return (
-                                  <div className="fm-bank-summary">
-                                    <h3 className="fm-bank-summary-title">
-                                      {t("internal.bank.summary.title")}
-                                    </h3>
-                                    <div className="fm-table-wrap">
-                                      <table className="fm-table fm-bank-summary-table">
-                                        <thead>
-                                          <tr>
-                                            <th style={{ textAlign: "center" }}>
-                                              {t("internal.bank.summary.colCode")}
-                                            </th>
-                                            <th>{t("internal.bank.summary.colLabel")}</th>
-                                            <th style={{ textAlign: "right" }}>
-                                              {t("internal.bank.summary.colPlus")}
-                                            </th>
-                                            <th style={{ textAlign: "right" }}>
-                                              {t("internal.bank.summary.colMinus")}
-                                            </th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {Array.from({ length: 13 }, (_, code) => {
-                                            const v = totalsByCode[String(code)];
-                                            return (
-                                              <tr key={code}>
-                                                <td style={{ textAlign: "center" }}>{code}</td>
-                                                <td className="cell-text">
-                                                  {t(`internal.bank.type.${code}`)}
-                                                </td>
-                                                <td style={{ textAlign: "right" }} className="cell-up">
-                                                  {fmt(v.plus)}
-                                                </td>
-                                                <td style={{ textAlign: "right" }} className="cell-down">
-                                                  {fmt(v.minus)}
-                                                </td>
-                                              </tr>
-                                            );
-                                          })}
-                                        </tbody>
-                                        <tfoot>
-                                          <tr className="fm-bank-summary-total">
-                                            <td colSpan={2} style={{ textAlign: "right" }}>
-                                              <strong>{t("internal.bank.summary.total")}</strong>
-                                            </td>
-                                            <td style={{ textAlign: "right" }}>
-                                              <strong>{fmt(totalPlus)}</strong>
-                                            </td>
-                                            <td style={{ textAlign: "right" }}>
-                                              <strong>{fmt(totalMinus)}</strong>
-                                            </td>
-                                          </tr>
-                                          <tr>
-                                            <td colSpan={2} style={{ textAlign: "right" }}>
-                                              {t("internal.bank.summary.balance")}
-                                            </td>
-                                            <td colSpan={2} style={{ textAlign: "right" }}>
-                                              <strong>
-                                                {fmt(balance)} {bank.currency}
-                                              </strong>
-                                            </td>
-                                          </tr>
-                                          <tr>
-                                            <td colSpan={2} style={{ textAlign: "right" }}>
-                                              {t("internal.bank.summary.pending")}
-                                            </td>
-                                            <td colSpan={2} style={{ textAlign: "right" }}>
-                                              <input
-                                                className="fm-bank-pending-input"
-                                                type="text"
-                                                inputMode="decimal"
-                                                placeholder="0.00"
-                                                value={bankPending[bank.accountNumber] ?? ""}
-                                                onChange={(event) =>
-                                                  setBankPending((current) => ({
-                                                    ...current,
-                                                    [bank.accountNumber]: event.target.value
-                                                  }))
-                                                }
-                                              />
-                                              <span className="fm-bank-pending-suffix">
-                                                {bank.currency}
-                                              </span>
-                                            </td>
-                                          </tr>
-                                        </tfoot>
-                                      </table>
-                                    </div>
-                                  </div>
-                                );
-                              })()}
-
-                              <div className="fm-table-wrap">
-                                <table className="fm-table">
-                                  <thead>
-                                    <tr>
-                                      <th>{t("internal.bank.colDate")}</th>
-                                      <th>{t("internal.bank.colDescription")}</th>
-                                      <th style={{ textAlign: "right" }}>{t("internal.bank.colDebit")}</th>
-                                      <th style={{ textAlign: "right" }}>{t("internal.bank.colCredit")}</th>
-                                      <th style={{ textAlign: "right" }}>{t("internal.bank.colEnd")}</th>
-                                      <th>{t("internal.bank.colCounterpart")}</th>
-                                      <th>{t("internal.bank.colType")}</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {txns.slice(0, 25).map((tx, idx) => {
-                                      const txKey = `${bank.accountNumber}-${idx}-${tx.date}`;
-                                      return (
-                                        <tr key={txKey}>
-                                          <td>{(tx.date ?? "").slice(0, 10)}</td>
-                                          <td className="cell-text">{tx.description ?? "—"}</td>
-                                          <td style={{ textAlign: "right" }} className="cell-down">
-                                            {tx.debit
-                                              ? tx.debit.toLocaleString("en-US", { maximumFractionDigits: 2 })
-                                              : ""}
-                                          </td>
-                                          <td style={{ textAlign: "right" }} className="cell-up">
-                                            {tx.credit
-                                              ? tx.credit.toLocaleString("en-US", { maximumFractionDigits: 2 })
-                                              : ""}
-                                          </td>
-                                          <td style={{ textAlign: "right" }}>
-                                            {(tx.endingBalance ?? 0).toLocaleString("en-US", {
-                                              maximumFractionDigits: 2
-                                            })}
-                                          </td>
-                                          <td>{tx.counterpartAccount ?? "—"}</td>
-                                          <td>
-                                            <select
-                                              className="fm-bank-type-select"
-                                              value={bankTxnTypes[txKey] ?? ""}
-                                              onChange={(event) =>
-                                                setBankTxnTypes((current) => ({
-                                                  ...current,
-                                                  [txKey]: event.target.value
-                                                }))
-                                              }
-                                            >
-                                              <option value="">{t("internal.bank.typePlaceholder")}</option>
-                                              {typeOptions.map((opt) => (
-                                                <option key={opt.value} value={opt.value}>
-                                                  {opt.label}
-                                                </option>
-                                              ))}
-                                            </select>
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
-                              </div>
-                              {bank.transactionCount > 25 ? (
-                                <p className="fm-card-sub" style={{ marginTop: "0.55rem" }}>
-                                  Showing 25 of {bank.transactionCount} transactions.
-                                </p>
-                              ) : null}
-                            </section>
-                          );
-                        })() : null}
-                      </>
-                    );
-                  })()}
-                </>
-              ) : null}
-
-              {activeFundTab === "new_trades" ? (
-                <div className="fm-grid">
-                  <form className="fm-form fm-card" onSubmit={onSubmitProposal}>
-                    <header className="fm-card-head">
-                      <h2>{t("internal.form.title")}</h2>
-                    </header>
-
-                    <label className="fm-field">
-                      <span>{t("internal.form.asset")}</span>
-                      <input
-                        value={proposalForm.asset}
-                        onChange={(event) => setProposalForm((current) => ({ ...current, asset: event.target.value }))}
-                        placeholder={lang === "mn" ? "Жишээ: MSE: APU" : "Example: MSE: APU"}
-                        required
-                      />
-                    </label>
-
-                    <label className="fm-field">
-                      <span>{t("internal.form.action")}</span>
-                      <select
-                        value={proposalForm.action}
-                        onChange={(event) =>
-                          setProposalForm((current) => ({ ...current, action: event.target.value as ProposalAction }))
-                        }
-                      >
-                        <option value="add">{t("internal.form.actionAdd")}</option>
-                        <option value="reduce">{t("internal.form.actionReduce")}</option>
-                      </select>
-                    </label>
-
-                    <label className="fm-field">
-                      <span>{t("internal.form.amount")}</span>
-                      <input
-                        type="number"
-                        min="1"
-                        value={proposalForm.amount}
-                        onChange={(event) => setProposalForm((current) => ({ ...current, amount: event.target.value }))}
-                        required
-                      />
-                    </label>
-
-                    <label className="fm-field">
-                      <span>{t("internal.form.reason")}</span>
-                      <textarea
-                        rows={3}
-                        value={proposalForm.reason}
-                        onChange={(event) => setProposalForm((current) => ({ ...current, reason: event.target.value }))}
-                        required
-                      />
-                    </label>
-
-                    <button className="btn btn-accent fm-submit" type="submit">
-                      {t("internal.form.submit")}
-                    </button>
-                  </form>
-
-                  <section className="fm-card">
-                    <header className="fm-card-head">
-                      <h2>{t("internal.table.title")}</h2>
-                    </header>
-                    {proposals.length ? (
-                      <div className="fm-table-wrap">
-                        <table className="fm-table">
-                          <thead>
-                            <tr>
-                              <th>{t("internal.table.asset")}</th>
-                              <th>{t("internal.table.action")}</th>
-                              <th>{t("internal.table.amount")}</th>
-                              <th>{t("internal.table.status")}</th>
-                              <th>{t("internal.table.date")}</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {proposals.slice(0, 8).map((proposal) => (
-                              <tr key={proposal.id}>
-                                <td>{proposal.asset}</td>
-                                <td>{actionLabel(proposal.action)}</td>
-                                <td>{proposal.amount.toLocaleString("en-US")} MNT</td>
-                                <td>
-                                  <span className={`status-pill status-${proposal.status}`}>
-                                    {statusLabel(proposal.status)}
-                                  </span>
-                                </td>
-                                <td>{proposal.createdAt}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <p className="fm-empty">{t("internal.empty")}</p>
-                    )}
-                  </section>
-                </div>
-              ) : null}
-
-              {activeFundTab === "users" ? (
-                <>
-                  <div className="fm-segment">
-                    <button
-                      type="button"
-                      className={`fm-segment-btn ${usersSegment === "investors" ? "active" : ""}`}
-                      onClick={() => setUsersSegment("investors")}
-                    >
-                      {t("internal.users.segInvestors")}
-                      <span className="fm-segment-count">
-                        {new Set(
-                          (fundInvestorSubscriptions as InvestorSubscription[]).map((s) =>
-                            (s.registerNumber ?? "").toString()
-                          )
-                        ).size}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`fm-segment-btn ${usersSegment === "workers" ? "active" : ""}`}
-                      onClick={() => setUsersSegment("workers")}
-                    >
-                      {t("internal.users.segWorkers")}
-                      <span className="fm-segment-count">{fundManagersDirectory.length}</span>
-                    </button>
-                  </div>
-
-                  {usersSegment === "workers" ? (
-                    <>
-                      <div className="fm-stats">
-                        <article className="fm-stat-card">
-                          <p>{t("internal.users.totalLabel")}</p>
-                          <strong>{fundManagersDirectory.length}</strong>
-                        </article>
-                        <article className="fm-stat-card">
-                          <p>{t("internal.users.activeLabel")}</p>
-                          <strong>{activeUsers}</strong>
-                        </article>
-                        <article className="fm-stat-card">
-                          <p>{t("internal.users.invitedLabel")}</p>
-                          <strong>{invitedUsers}</strong>
-                        </article>
-                      </div>
-
-                      <section className="fm-card">
-                        <header className="fm-card-head">
-                          <h2>{t("internal.users.title")}</h2>
-                          <button className="btn btn-accent fm-card-action" type="button">
-                            {t("internal.users.invite")}
-                          </button>
-                        </header>
-                        <div className="fm-table-wrap">
-                          <table className="fm-table fm-users-table">
-                            <thead>
-                              <tr>
-                                <th>{t("internal.users.colName")}</th>
-                                <th>{t("internal.users.colEmail")}</th>
-                                <th>{t("internal.users.colTitle")}</th>
-                                <th>{t("internal.users.colStatus")}</th>
-                                <th>{t("internal.users.colLogin")}</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {fundManagersDirectory.map((user) => (
-                                <tr key={user.id}>
-                                  <td>
-                                    <div className="fm-user-cell">
-                                      <span className="fm-user-avatar">{initials(user.name)}</span>
-                                      <span>{user.name}</span>
-                                    </div>
-                                  </td>
-                                  <td>{user.email}</td>
-                                  <td>{user.title}</td>
-                                  <td>
-                                    <span className={`status-pill status-${user.status === "active" ? "approved" : "pending"}`}>
-                                      {user.status === "active"
-                                        ? t("internal.users.statusActive")
-                                        : t("internal.users.statusInvited")}
-                                    </span>
-                                  </td>
-                                  <td>{user.lastLogin}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </section>
-                    </>
-                  ) : (
-                    (() => {
-                      const subs = fundInvestorSubscriptions as InvestorSubscription[];
-                      const grouped = new Map<string, InvestorSubscription[]>();
-                      for (const s of subs) {
-                        const key = (s.registerNumber ?? `_${s.no ?? Math.random()}`).toString();
-                        const list = grouped.get(key) ?? [];
-                        list.push(s);
-                        grouped.set(key, list);
-                      }
-                      const investors = [...grouped.entries()]
-                        .map(([reg, records]) => {
-                          const sorted = [...records].sort((a, b) =>
-                            (a.transferDate ?? "") < (b.transferDate ?? "") ? -1 : 1
-                          );
-                          const first = sorted[0];
-                          const fullName = [first.lastName, first.firstName].filter(Boolean).join(" ");
-                          const totalPurchased = sorted.reduce(
-                            (sum, r) => sum + (r.unitsPurchased ?? 0),
-                            0
-                          );
-                          const totalReturned = sorted.reduce(
-                            (sum, r) => sum + (r.unitsReturned ?? 0),
-                            0
-                          );
-                          const totalActive = sorted.reduce(
-                            (sum, r) => sum + (r.unitsActive ?? 0),
-                            0
-                          );
-                          const totalTransferred = sorted.reduce(
-                            (sum, r) => sum + (r.transferAmount ?? 0),
-                            0
-                          );
-                          return {
-                            key: reg,
-                            fullName: fullName || "—",
-                            register: first.registerNumber ?? "—",
-                            phone: first.phone ?? "—",
-                            email: first.email ?? "—",
-                            totalPurchased,
-                            totalReturned,
-                            totalActive,
-                            totalTransferred,
-                            subscriptions: sorted
-                          };
-                        })
-                        .sort((a, b) => b.totalActive - a.totalActive);
-
-                      const totalActiveUnits = investors.reduce((s, i) => s + i.totalActive, 0);
-                      const totalReturnedUnits = investors.reduce((s, i) => s + i.totalReturned, 0);
-
-                      return (
-                        <>
-                          <div className="fm-stats">
-                            <article className="fm-stat-card primary">
-                              <p>{t("internal.users.totalInvestorsLabel")}</p>
-                              <strong>{investors.length}</strong>
-                            </article>
-                            <article className="fm-stat-card">
-                              <p>{t("internal.users.totalActiveUnitsLabel")}</p>
-                              <strong>{totalActiveUnits.toLocaleString("en-US")}</strong>
-                            </article>
-                            <article className="fm-stat-card">
-                              <p>{t("internal.users.totalReturnedUnitsLabel")}</p>
-                              <strong>{totalReturnedUnits.toLocaleString("en-US")}</strong>
-                            </article>
-                          </div>
-
-                          <section className="fm-card">
-                            <header className="fm-card-head">
-                              <h2>{t("internal.users.investorsTitle")}</h2>
-                              <p className="fm-card-sub">
-                                {investors.length} {t("internal.users.segInvestors")}
-                              </p>
-                            </header>
-                            <div className="fm-ticker-list">
-                              {investors.map((inv) => {
-                                const key = `inv:${inv.key}`;
-                                const open = expandedTickers.has(key);
-                                const hasReturned = inv.totalReturned > 0;
-                                return (
-                                  <div key={inv.key} className={`fm-ticker-card ${open ? "open" : ""}`}>
-                                    <button
-                                      type="button"
-                                      className="fm-ticker-toggle fm-investor-toggle"
-                                      onClick={() => toggleTicker(key)}
-                                      aria-expanded={open}
-                                    >
-                                      <span className="fm-ticker-arrow" aria-hidden="true">▸</span>
-                                      <span className="fm-user-cell">
-                                        <span className="fm-user-avatar">{initials(inv.fullName)}</span>
-                                        <span>{inv.fullName}</span>
-                                      </span>
-                                      <span className="fm-investor-meta">{inv.register}</span>
-                                      <span className="fm-ticker-net">
-                                        {inv.totalActive.toLocaleString("en-US")} {t("internal.users.colActive")}
-                                      </span>
-                                      {hasReturned ? (
-                                        <span className="fm-investor-returned">
-                                          −{inv.totalReturned.toLocaleString("en-US")} {t("internal.users.colReturned")}
-                                        </span>
-                                      ) : null}
-                                      <span className="fm-ticker-count">
-                                        {inv.subscriptions.length} {inv.subscriptions.length === 1
-                                          ? t("internal.users.subsOne")
-                                          : t("internal.users.subsMany")}
-                                      </span>
-                                    </button>
-                                    {open ? (
-                                      <div className="fm-ticker-detail">
-                                        <div className="fm-investor-contact">
-                                          <span>
-                                            <strong>{t("internal.users.colPhone")}:</strong> {inv.phone}
-                                          </span>
-                                          <span>
-                                            <strong>{t("internal.users.colEmail")}:</strong> {inv.email}
-                                          </span>
-                                        </div>
-                                        <div className="fm-table-wrap">
-                                          <table className="fm-table">
-                                            <thead>
-                                              <tr>
-                                                <th>{t("internal.users.colTransferDate")}</th>
-                                                <th>{t("internal.users.colType")}</th>
-                                                <th style={{ textAlign: "right" }}>{t("internal.users.colUnits")}</th>
-                                                <th style={{ textAlign: "right" }}>{t("internal.users.colUnitValue")}</th>
-                                                <th style={{ textAlign: "right" }}>{t("internal.users.colTransferAmount")}</th>
-                                                <th style={{ textAlign: "right" }}>{t("internal.users.colActive")}</th>
-                                              </tr>
-                                            </thead>
-                                            <tbody>
-                                              {(() => {
-                                                const rows: ReactElement[] = [];
-                                                let balance = 0;
-                                                inv.subscriptions.forEach((s, i) => {
-                                                  const buyUnits = s.unitsPurchased ?? 0;
-                                                  if (buyUnits > 0) {
-                                                    balance += buyUnits;
-                                                    rows.push(
-                                                      <tr key={`${inv.key}-${i}-buy`}>
-                                                        <td>{s.transferDate ?? "—"}</td>
-                                                        <td>
-                                                          <span className="trade-type buy">BUY</span>
-                                                        </td>
-                                                        <td style={{ textAlign: "right" }}>
-                                                          {buyUnits.toLocaleString("en-US")}
-                                                        </td>
-                                                        <td style={{ textAlign: "right" }}>
-                                                          {(s.unitValue ?? 0).toLocaleString("en-US", {
-                                                            maximumFractionDigits: 2
-                                                          })}{" "}
-                                                          MNT
-                                                        </td>
-                                                        <td style={{ textAlign: "right" }}>
-                                                          {(s.transferAmount ?? 0).toLocaleString("en-US", {
-                                                            maximumFractionDigits: 0
-                                                          })}
-                                                        </td>
-                                                        <td style={{ textAlign: "right" }}>
-                                                          <strong>{balance.toLocaleString("en-US")}</strong>
-                                                        </td>
-                                                      </tr>
-                                                    );
-                                                  }
-                                                  const sellUnits = s.unitsReturned ?? 0;
-                                                  if (sellUnits > 0) {
-                                                    balance -= sellUnits;
-                                                    rows.push(
-                                                      <tr key={`${inv.key}-${i}-sell`}>
-                                                        <td>—</td>
-                                                        <td>
-                                                          <span className="trade-type sell">SELL</span>
-                                                        </td>
-                                                        <td style={{ textAlign: "right" }} className="cell-down">
-                                                          −{sellUnits.toLocaleString("en-US")}
-                                                        </td>
-                                                        <td style={{ textAlign: "right" }}>—</td>
-                                                        <td style={{ textAlign: "right" }}>—</td>
-                                                        <td style={{ textAlign: "right" }}>
-                                                          <strong>{balance.toLocaleString("en-US")}</strong>
-                                                        </td>
-                                                      </tr>
-                                                    );
-                                                  }
-                                                });
-                                                return rows;
-                                              })()}
-                                            </tbody>
-                                          </table>
-                                        </div>
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </section>
-                        </>
-                      );
-                    })()
-                  )}
-                </>
-              ) : null}
-
-              {activeFundTab === "settings" ? (
-                <div className="fm-settings-grid">
-                  <section className="fm-card">
-                    <header className="fm-card-head">
-                      <h2>{t("internal.settings.profileTitle")}</h2>
-                      <p className="fm-card-sub">{t("internal.settings.profileDesc")}</p>
-                    </header>
-                    <div className="fm-field-grid">
-                      <label className="fm-field">
-                        <span>{t("internal.settings.fullName")}</span>
-                        <input defaultValue={currentUser.name} />
-                      </label>
-                      <label className="fm-field">
-                        <span>{t("internal.settings.email")}</span>
-                        <input defaultValue={currentUser.email} type="email" />
-                      </label>
-                      <label className="fm-field">
-                        <span>{t("internal.settings.language")}</span>
-                        <select value={lang} onChange={() => onToggleLang()}>
-                          <option value="mn">Монгол</option>
-                          <option value="en">English</option>
-                        </select>
-                      </label>
-                      <label className="fm-field">
-                        <span>{t("internal.users.colTitle")}</span>
-                        <input defaultValue={currentUser.title} readOnly />
-                      </label>
-                    </div>
-                    <div className="fm-card-actions">
-                      <button className="btn btn-accent" type="button">
-                        {t("internal.settings.save")}
-                      </button>
-                    </div>
-                  </section>
-
-                  <section className="fm-card">
-                    <header className="fm-card-head">
-                      <h2>{t("internal.settings.passwordTitle")}</h2>
-                      <p className="fm-card-sub">{t("internal.settings.passwordDesc")}</p>
-                    </header>
-                    <div className="fm-field-grid">
-                      <label className="fm-field fm-field-full">
-                        <span>{t("internal.settings.currentPassword")}</span>
-                        <input type="password" placeholder="••••••••" />
-                      </label>
-                      <label className="fm-field">
-                        <span>{t("internal.settings.newPassword")}</span>
-                        <input type="password" placeholder="••••••••" />
-                      </label>
-                      <label className="fm-field">
-                        <span>{t("internal.settings.confirmPassword")}</span>
-                        <input type="password" placeholder="••••••••" />
-                      </label>
-                    </div>
-                    <div className="fm-card-actions">
-                      <button className="btn btn-accent" type="button">
-                        {t("internal.settings.updatePassword")}
-                      </button>
-                    </div>
-                  </section>
-
-                  <section className="fm-card fm-card-wide">
-                    <header className="fm-card-head">
-                      <h2>{t("internal.settings.dataSourceTitle")}</h2>
-                      <p className="fm-card-sub">{t("internal.settings.dataSourceDesc")}</p>
-                    </header>
-                    <dl className="fm-meta-list">
-                      <div>
-                        <dt>{t("internal.settings.provider")}</dt>
-                        <dd>Mongolian Stock Exchange — Public Market Data API</dd>
-                      </div>
-                      <div>
-                        <dt>{t("internal.settings.endpoint")}</dt>
-                        <dd><code>https://api.mse.mn/v1/market</code></dd>
-                      </div>
-                      <div>
-                        <dt>{t("internal.settings.apiKey")}</dt>
-                        <dd><code>msex_•••••••••••••••3f9a</code></dd>
-                      </div>
-                      <div>
-                        <dt>{t("internal.settings.refresh")}</dt>
-                        <dd>15 min</dd>
-                      </div>
-                      <div>
-                        <dt>{t("internal.settings.statusLabel")}</dt>
-                        <dd>
-                          <span className="status-pill status-approved">
-                            <span className="status-dot" />
-                            {t("internal.settings.statusOk")}
-                          </span>
-                        </dd>
-                      </div>
-                    </dl>
-                  </section>
-                </div>
-              ) : null}
-
-                </>
-              )}
-            </main>
           </div>
 
-          {splitTicker ? (
-            <div
-              className="modal"
-              onClick={(event) => event.target === event.currentTarget && setSplitTicker(null)}
-            >
-              <div className="modal-card fm-split-modal">
-                <h3>{t("internal.trades.splitModal.title")}</h3>
-                <p className="fm-card-sub">
-                  <strong>{splitTicker.ticker}</strong> · {splitTicker.currency}
-                </p>
-                <form onSubmit={applySplit}>
-                  <div className="fm-split-fields">
-                    <label className="fm-field">
-                      <span>{t("internal.trades.splitModal.new")}</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={splitForm.newShares}
-                        onChange={(e) => setSplitForm((p) => ({ ...p, newShares: e.target.value }))}
-                        required
-                      />
-                    </label>
-                    <span className="fm-split-colon">:</span>
-                    <label className="fm-field">
-                      <span>{t("internal.trades.splitModal.old")}</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={splitForm.oldShares}
-                        onChange={(e) => setSplitForm((p) => ({ ...p, oldShares: e.target.value }))}
-                        required
-                      />
-                    </label>
-                  </div>
-                  <div className="fm-card-actions">
-                    <button
-                      type="button"
-                      className="btn btn-ghost"
-                      onClick={() => setSplitTicker(null)}
-                    >
-                      {t("internal.trades.preview.cancel")}
-                    </button>
-                    <button type="submit" className="btn btn-accent">
-                      {t("internal.trades.splitModal.apply")}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          ) : null}
+          <nav className="fm-sidebar-nav">
+            {fundManagerTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`fm-sidebar-item ${activeFundTab === tab.id ? "active" : ""}`}
+                onClick={() => setActiveFundTab(tab.id)}
+              >
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </nav>
 
-          {stockAddChoiceOpen ? (
-            <div
-              className="modal"
-              onClick={(event) => event.target === event.currentTarget && setStockAddChoiceOpen(false)}
-            >
-              <div className="modal-card fm-choice-modal">
-                <h3>{t("internal.trades.addChoiceTitle")}</h3>
-                <div className="fm-choice-grid">
-                  <button
-                    type="button"
-                    className="fm-choice-btn"
-                    onClick={() => {
-                      setStockAddChoiceOpen(false);
-                      setTradeEntryOpen(true);
-                    }}
-                  >
-                    <strong>{t("internal.trades.manualEntry")}</strong>
-                  </button>
-                  <button
-                    type="button"
-                    className="fm-choice-btn"
-                    onClick={() => {
-                      setStockAddChoiceOpen(false);
-                      tradeFileInputRef.current?.click();
-                    }}
-                  >
-                    <strong>{t("internal.trades.excelImport")}</strong>
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-ghost full"
-                  onClick={() => setStockAddChoiceOpen(false)}
-                >
-                  {t("internal.trades.preview.cancel")}
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {excelPreview ? (
-            <div
-              className="modal"
-              onClick={(event) => event.target === event.currentTarget && setExcelPreview(null)}
-            >
-              <div className="modal-card fm-preview-modal">
-                <h3>{t("internal.trades.preview.title")}</h3>
-                <p className="fm-card-sub">
-                  <strong>{excelPreview.fileName}</strong> · {excelPreview.rows.length}{" "}
-                  {t("internal.trades.preview.found")}
-                </p>
-
-                {excelPreview.error ? (
-                  <div className="fm-preview-warning">⚠ {excelPreview.error}</div>
-                ) : null}
-
-                {excelPreview.missing.length > 0 ? (
-                  <div className="fm-preview-warning">
-                    <strong>{t("internal.trades.preview.missing")}:</strong>{" "}
-                    {excelPreview.missing.join(", ")}
-                  </div>
-                ) : (
-                  <div className="fm-preview-ok">✓ {t("internal.trades.preview.allFound")}</div>
-                )}
-
-                <div className="fm-preview-columns">
-                  {REQUIRED_TRADE_COLUMNS.map((col) => {
-                    const found = excelPreview.detected.includes(col);
-                    return (
-                      <span key={col} className={`fm-preview-col ${found ? "found" : "missing"}`}>
-                        {found ? "✓" : "✗"} {col}
-                      </span>
-                    );
-                  })}
-                </div>
-
-                {excelPreview.rows.length > 0 ? (
-                  <>
-                    <p className="fm-card-sub" style={{ marginTop: "0.85rem" }}>
-                      {t("internal.trades.preview.sample")}
-                    </p>
-                    <div className="fm-table-wrap">
-                      <table className="fm-table fm-preview-table">
-                        <thead>
-                          <tr>
-                            <th>Date</th>
-                            <th>Type</th>
-                            <th>Ticker</th>
-                            <th>Qty</th>
-                            <th>Price</th>
-                            <th>Total</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {excelPreview.rows.slice(0, 5).map((r) => (
-                            <tr key={r.id}>
-                              <td>{r.tradeDate}</td>
-                              <td>
-                                <span className={`trade-type ${r.type.toLowerCase()}`}>{r.type}</span>
-                              </td>
-                              <td>
-                                <strong>{r.ticker}</strong>
-                              </td>
-                              <td style={{ textAlign: "right" }}>
-                                {r.quantity.toLocaleString("en-US")}
-                              </td>
-                              <td style={{ textAlign: "right" }}>
-                                {r.unitPrice.toLocaleString("en-US", { maximumFractionDigits: 4 })}
-                              </td>
-                              <td style={{ textAlign: "right" }}>
-                                {r.total.toLocaleString("en-US", { maximumFractionDigits: 2 })}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                ) : null}
-
-                <div className="fm-card-actions">
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={() => setExcelPreview(null)}
-                  >
-                    {t("internal.trades.preview.cancel")}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-accent"
-                    disabled={excelPreview.rows.length === 0}
-                    onClick={confirmExcelImport}
-                  >
-                    {t("internal.trades.preview.confirm")} ({excelPreview.rows.length})
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {bondFormOpen ? (
-            <div className="modal" onClick={(event) => event.target === event.currentTarget && setBondFormOpen(false)}>
-              <div className="modal-card fm-bond-modal">
-                <h3>{t("internal.portfolio.bondModal.title")}</h3>
-                <form onSubmit={onSubmitBond}>
-                  <div className="fm-field-grid">
-                    <label className="fm-field">
-                      <span>{t("internal.portfolio.bondModal.ticker")}</span>
-                      <input
-                        value={bondForm.ticker}
-                        onChange={(e) => setBondForm((p) => ({ ...p, ticker: e.target.value }))}
-                        required
-                      />
-                    </label>
-                    <label className="fm-field">
-                      <span>{t("internal.portfolio.bondModal.name")}</span>
-                      <input
-                        value={bondForm.name}
-                        onChange={(e) => setBondForm((p) => ({ ...p, name: e.target.value }))}
-                        required
-                      />
-                    </label>
-                    <label className="fm-field">
-                      <span>{t("internal.portfolio.bondModal.yield")}</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={bondForm.yield}
-                        onChange={(e) => setBondForm((p) => ({ ...p, yield: e.target.value }))}
-                        required
-                      />
-                    </label>
-                    <label className="fm-field">
-                      <span>{t("internal.portfolio.bondModal.qty")}</span>
-                      <input
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={bondForm.qty}
-                        onChange={(e) => setBondForm((p) => ({ ...p, qty: e.target.value }))}
-                        required
-                      />
-                    </label>
-                    <label className="fm-field">
-                      <span>{t("internal.portfolio.bondModal.value")}</span>
-                      <input
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={bondForm.value}
-                        onChange={(e) => setBondForm((p) => ({ ...p, value: e.target.value }))}
-                        required
-                      />
-                    </label>
-                    <label className="fm-field">
-                      <span>{t("internal.portfolio.bondModal.purchaseInterest")}</span>
-                      <input
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={bondForm.purchaseInterest}
-                        onChange={(e) => setBondForm((p) => ({ ...p, purchaseInterest: e.target.value }))}
-                      />
-                    </label>
-                    <label className="fm-field">
-                      <span>{t("internal.portfolio.bondModal.purchaseDate")}</span>
-                      <input
-                        type="date"
-                        value={bondForm.purchaseDate}
-                        onChange={(e) => setBondForm((p) => ({ ...p, purchaseDate: e.target.value }))}
-                        required
-                      />
-                    </label>
-                    <label className="fm-field">
-                      <span>{t("internal.portfolio.bondModal.paymentDate")}</span>
-                      <input
-                        type="date"
-                        value={bondForm.paymentDate}
-                        onChange={(e) => setBondForm((p) => ({ ...p, paymentDate: e.target.value }))}
-                      />
-                    </label>
-                    <label className="fm-field">
-                      <span>{t("internal.portfolio.bondModal.maturityDate")}</span>
-                      <input
-                        type="date"
-                        value={bondForm.maturityDate}
-                        onChange={(e) => setBondForm((p) => ({ ...p, maturityDate: e.target.value }))}
-                      />
-                    </label>
-                  </div>
-                  <div className="fm-card-actions">
-                    <button type="button" className="btn btn-ghost" onClick={() => setBondFormOpen(false)}>
-                      {t("internal.portfolio.bondModal.cancel")}
-                    </button>
-                    <button type="submit" className="btn btn-accent">
-                      {t("internal.portfolio.bondModal.submit")}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      );
-    }
-
-    return (
-      <div className="app">
-        <header className="site-header">
-          <div className="container header-wrap">
-            <a className="brand" href={`/?lang=${lang}`}>
-              <img src="/assets/logo.png" alt="UB Asset Management logo" />
-              <div>
-                <p className="brand-name">Улаанбаатар Ассет Менежмент ХХК</p>
-                <p className="brand-sub">{t("internal.brand")}</p>
-              </div>
-            </a>
-            <div />
-            <div className="header-actions">
-              <a className="btn btn-ghost" href={`/?lang=${lang}`}>
-                {t("internal.back")}
+          <div className="fm-sidebar-footer">
+            <div className="fm-sidebar-actions">
+              <button
+                type="button"
+                className="fm-sidebar-action"
+                onClick={onToggleLang}
+                aria-label="Toggle language"
+              >
+                {lang === "mn" ? "EN" : "MN"}
+              </button>
+              <a className="fm-sidebar-action" href={`/?lang=${lang}`}>
+                {t("internal.fmSidebar.signout")}
               </a>
             </div>
           </div>
-        </header>
+        </aside>
 
-        <main>
-          <section className="section section-soft internal-section">
-            <div className="container internal-wrap internal-portal">
-              <article className="internal-card internal-portal-card">
-                <p className="internal-label">{t("internal.selected")}</p>
-                <h1>{selectedRoleLabel}</h1>
-                <section className="board-placeholder">
-                  <h2>{t("internal.boardTitle")}</h2>
-                  <p>{t("internal.boardDesc")}</p>
-                </section>
-                <div className="internal-actions">
-                  <a className="btn btn-accent" href={`/?lang=${lang}`}>
-                    {t("internal.switch")}
-                  </a>
-                  <a className="btn btn-ghost" href={`/?lang=${lang}#contact`}>
-                    {t("internal.help")}
-                  </a>
-                </div>
-              </article>
+        <div className="fm-main">
+          <header className="fm-topbar">
+            <div>
+              <h1 className="fm-topbar-title">
+                {fundManagerTabs.find((tab) => tab.id === activeFundTab)?.label ??
+                  (lang === "mn" ? "Бидний тухай" : "About us")}
+              </h1>
             </div>
-          </section>
-        </main>
+          </header>
+
+          <main className="fm-content">
+            <AdminPanel lang={lang} section={activeFundTab as AdminSection} />
+          </main>
+        </div>
       </div>
     );
   }
@@ -4766,7 +2528,13 @@ export default function App() {
               {lang === "mn" ? "EN" : "MN"}
             </button>
             {!PUBLIC_ONLY ? (
-              <button className="btn btn-accent" type="button" onClick={() => setLoginOpen(true)}>
+              <button
+                className="btn btn-accent"
+                type="button"
+                onClick={() => {
+                  window.location.href = `/internal?lang=${lang}`;
+                }}
+              >
                 {t("auth.login")}
               </button>
             ) : null}
@@ -4808,58 +2576,85 @@ export default function App() {
               </div>
             </section>
 
-            <section className="section home-value">
+            <section className="section home-allocation">
               <div className="container">
-                <div className="value-top">
-                  <FeaturedGlobe lang={lang} />
-                  <div className="value-text">
-                    <h2 className="value-title">{t("value.title")}</h2>
-                    <p className="value-intro">{t("value.intro")}</p>
-                    <p className="asset-label">{t("value.assets")}</p>
-                    <ul className="asset-chips">
-                      <li>{t("asset.global")}</li>
-                      <li>{t("asset.domestic")}</li>
-                      <li>{t("asset.bonds")}</li>
-                      <li>{t("asset.realestate")}</li>
-                    </ul>
+                <div className="section-head">
+                  <h2 className="section-title">
+                    {lang === "mn" ? "Хөрөнгө оруулаж буй бүтээгдэхүүн" : "Investment products"}
+                  </h2>
+                </div>
+                <div className="alloc-layout">
+                  <div className="alloc-col alloc-col-left">
+                    <article className="alloc-card">
+                      <h3 className="alloc-title">{t("asset.global")}</h3>
+                    </article>
+                    <article className="alloc-card">
+                      <h3 className="alloc-title">{t("asset.domestic")}</h3>
+                    </article>
+                  </div>
+
+                  <div className="alloc-globe">
+                    <SpinningGlobe />
+                  </div>
+
+                  <div className="alloc-col alloc-col-right">
+                    <article className="alloc-card">
+                      <h3 className="alloc-title">{t("asset.bonds")}</h3>
+                    </article>
+                    <article className="alloc-card">
+                      <h3 className="alloc-title">{t("asset.realestate")}</h3>
+                    </article>
                   </div>
                 </div>
+              </div>
+            </section>
 
-                <div className="value-cards">
-                  <article className="value-card">
-                    <span className="value-icon" aria-hidden="true">
-                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="9" />
-                        <path d="M3 12h18" />
-                        <path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z" />
-                      </svg>
-                    </span>
-                    <h3 className="value-card-title">{t("value.c1.t")}</h3>
-                    <p className="value-card-text">{t("value.c1.d")}</p>
-                  </article>
-
-                  <article className="value-card">
-                    <span className="value-icon" aria-hidden="true">
-                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z" />
-                        <path d="m9 12 2 2 4-4" />
-                      </svg>
-                    </span>
-                    <h3 className="value-card-title">{t("value.c2.t")}</h3>
-                    <p className="value-card-text">{t("value.c2.d")}</p>
-                  </article>
-
-                  <article className="value-card">
-                    <span className="value-icon" aria-hidden="true">
-                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 17 9 11l4 4 8-8" />
-                        <path d="M21 3v6h-6" />
-                      </svg>
-                    </span>
-                    <h3 className="value-card-title">{t("value.c3.t")}</h3>
-                    <p className="value-card-text">{t("value.c3.d")}</p>
-                  </article>
+            <section className="section home-exchanges">
+              <div className="container">
+                <div className="section-head">
+                  <h2 className="section-title">
+                    {lang === "mn" ? "Дэлхийн хөрөнгийн биржүүд" : "Global stock exchanges"}
+                  </h2>
                 </div>
+              </div>
+              <div className="logo-marquee">
+                <div className="logo-track">
+                  {[...EXCHANGES, ...EXCHANGES, ...EXCHANGES, ...EXCHANGES].map((name, i) => (
+                    <span className="logo-item" key={i}>
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <section className="section home-fx">
+              <div className="container">
+                <div className="section-head">
+                  <h2 className="section-title">
+                    {lang === "mn" ? "Зах зээлд идэвхтэй оролцогч" : "An active market participant"}
+                  </h2>
+                </div>
+                <div className="fx-grid">
+                  {bomRates.map((r) => (
+                    <div className="fx-item" key={r.code}>
+                      <span className="fx-code">{r.code}</span>
+                      <span className="fx-name">{lang === "mn" ? r.nameMn : r.nameEn}</span>
+                      <span className="fx-rate">₮{r.rate}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <section className="section home-calc">
+              <div className="container">
+                <div className="section-head">
+                  <h2 className="section-title">
+                    {lang === "mn" ? "Өсөлтийн тооцоолуур" : "Growth calculator"}
+                  </h2>
+                </div>
+                <InterestCalculator lang={lang} />
               </div>
             </section>
           </>
@@ -4996,7 +2791,7 @@ export default function App() {
                   aria-expanded={fundMenuOpen}
                   onClick={() => setFundMenuOpen((open) => !open)}
                 >
-                  <span>{lang === "mn" ? FUNDS[fundIdx].nameMn : FUNDS[fundIdx].nameEn}</span>
+                  <span>{lang === "mn" ? activeFund.nameMn : activeFund.nameEn}</span>
                   <svg
                     className={`fund-chevron${fundMenuOpen ? " open" : ""}`}
                     width="18"
@@ -5014,7 +2809,7 @@ export default function App() {
                 </button>
                 {fundMenuOpen ? (
                   <ul className="fund-menu" role="listbox">
-                    {FUNDS.map((f, i) => (
+                    {funds.map((f, i) => (
                       <li key={f.id} role="option" aria-selected={i === fundIdx}>
                         <button
                           type="button"
@@ -5035,21 +2830,21 @@ export default function App() {
               <div className="fund-overview">
                 <article className="fund-overview-card">
                   <h3 className="fund-name">
-                    {lang === "mn" ? FUNDS[fundIdx].nameMn : FUNDS[fundIdx].nameEn}
+                    {lang === "mn" ? activeFund.nameMn : activeFund.nameEn}
                   </h3>
-                  {FUNDS[fundIdx].tagMn ? (
+                  {activeFund.tagMn ? (
                     <p className="fund-tag">
-                      {lang === "mn" ? FUNDS[fundIdx].tagMn : FUNDS[fundIdx].tagEn}
+                      {lang === "mn" ? activeFund.tagMn : activeFund.tagEn}
                     </p>
                   ) : null}
 
-                  {FUNDS[fundIdx].comingSoon ? (
+                  {activeFund.comingSoon ? (
                     <p className="fund-coming-soon">
                       {lang === "mn" ? "Тун удахгүй..." : "Coming soon..."}
                     </p>
                   ) : null}
 
-                  {(FUNDS[fundIdx].sections ?? []).map((s, si) => (
+                  {(activeFund.sections ?? []).map((s, si) => (
                     <div className="fund-section" key={si}>
                       <h4 className="fund-section-title">
                         {lang === "mn" ? s.headingMn : s.headingEn}
@@ -5064,13 +2859,13 @@ export default function App() {
                 </article>
               </div>
 
-              {FUNDS[fundIdx].committee ? (
+              {activeFund.committee.length > 0 ? (
                 <div className="fund-committee">
                   <h3 className="fund-committee-title">{t("funds.committee")}</h3>
                   <div className="committee-grid">
-                    {FUNDS[fundIdx].committee!.map((m, i) => (
+                    {activeFund.committee.map((m, i) => (
                       <article className="member-card" key={i}>
-                        <MemberAvatar name={lang === "mn" ? m.nameMn : m.nameEn} photo={m.photo} />
+                        <MemberAvatar name={lang === "mn" ? m.nameMn : m.nameEn} photo={teamPhotoUrl(m.photo) ?? undefined} />
                         <p className="member-name">{lang === "mn" ? m.nameMn : m.nameEn}</p>
                         <p className="member-role">{lang === "mn" ? m.roleMn : m.roleEn}</p>
                       </article>
@@ -5231,131 +3026,6 @@ export default function App() {
         </div>
       ) : null}
 
-      {loginOpen ? (
-        <div className="modal" onClick={(event) => event.target === event.currentTarget && closeLogin()}>
-          <div className="modal-card login-card">
-            {pendingRole ? (
-              <>
-                <div className="login-head">
-                  <span className="login-lock" aria-hidden="true">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3 21h18" />
-                      <path d="M6 21V5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v16" />
-                      <path d="M15 9h3a1 1 0 0 1 1 1v11" />
-                      <path d="M9 8h2" />
-                      <path d="M9 12h2" />
-                      <path d="M9 16h2" />
-                    </svg>
-                  </span>
-                  <p className="login-eyebrow">{lang === "mn" ? "Сан сонгох" : "Select fund"}</p>
-                </div>
-                <div className="role-list">
-                  {funds.map((fund) => (
-                    <button
-                      key={fund.id}
-                      className="role-option"
-                      type="button"
-                      onClick={() => toInternal(pendingRole, fund.id)}
-                    >
-                      <span className="role-option-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M3 21h18" />
-                          <path d="M6 21V5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v16" />
-                          <path d="M15 9h3a1 1 0 0 1 1 1v11" />
-                          <path d="M9 8h2" />
-                          <path d="M9 12h2" />
-                          <path d="M9 16h2" />
-                        </svg>
-                      </span>
-                      <span className="role-option-text">
-                        <span className="role-option-title">{fund.name}</span>
-                      </span>
-                      <span className="role-option-arrow" aria-hidden="true">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M9 6l6 6-6 6" />
-                        </svg>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                <button className="login-cancel" type="button" onClick={() => setPendingRole(null)}>
-                  {lang === "mn" ? "Буцах" : "Back"}
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="login-head">
-                  <span className="login-lock" aria-hidden="true">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="4" y="11" width="16" height="9" rx="2" />
-                      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-                    </svg>
-                  </span>
-                  <p className="login-eyebrow">{t("internal.brand")}</p>
-                </div>
-                <div className="role-list">
-                  {([
-                    {
-                      role: "board_member" as Role,
-                      title: t("role.board"),
-                      icon: (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="9" cy="8" r="3.2" />
-                          <path d="M3 19c0-3.3 2.7-6 6-6s6 2.7 6 6" />
-                          <circle cx="17.5" cy="7.5" r="2.4" />
-                          <path d="M16 13a5 5 0 0 1 5 5" />
-                        </svg>
-                      )
-                    },
-                    {
-                      role: "fund_manager" as Role,
-                      title: t("role.fund"),
-                      icon: (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M4 20V4" />
-                          <path d="M4 20h16" />
-                          <rect x="7" y="12" width="3" height="5" />
-                          <rect x="13" y="8" width="3" height="9" />
-                        </svg>
-                      )
-                    },
-                    {
-                      role: "general_admin" as Role,
-                      title: t("role.admin"),
-                      icon: (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 3l7 3v5c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6z" />
-                          <path d="M9 12l2 2 4-4" />
-                        </svg>
-                      )
-                    }
-                  ]).map((opt) => (
-                    <button
-                      key={opt.role}
-                      className="role-option"
-                      type="button"
-                      onClick={() => chooseRole(opt.role)}
-                    >
-                      <span className="role-option-icon">{opt.icon}</span>
-                      <span className="role-option-text">
-                        <span className="role-option-title">{opt.title}</span>
-                      </span>
-                      <span className="role-option-arrow" aria-hidden="true">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M9 6l6 6-6 6" />
-                        </svg>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                <button className="login-cancel" type="button" onClick={closeLogin}>
-                  {t("login.cancel")}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

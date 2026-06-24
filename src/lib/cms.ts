@@ -226,6 +226,142 @@ export async function saveContact(info: ContactInfo): Promise<void> {
   if (error) throw error;
 }
 
+// ---------- Investment funds (stored in site_settings under key 'funds') ----------
+export type FundSection = { headingMn: string; headingEn: string; bodyMn: string[]; bodyEn: string[] };
+export type CommitteeMember = {
+  nameMn: string;
+  nameEn: string;
+  roleMn: string;
+  roleEn: string;
+  photo: string | null;
+};
+export type Fund = {
+  id: string;
+  nameMn: string;
+  nameEn: string;
+  tagMn?: string;
+  tagEn?: string;
+  comingSoon?: boolean;
+  sections: FundSection[];
+  committee: CommitteeMember[];
+};
+
+export const DEFAULT_FUNDS: Fund[] = [
+  {
+    id: "misheel",
+    nameMn: "Мишээл Рийл Истэйт Фанд",
+    nameEn: "Misheel Real Estate Fund",
+    sections: [
+      {
+        headingMn: "Танилцуулга",
+        headingEn: "Overview",
+        bodyMn: [
+          "Мишээл Фанд нь олон улсын хувьцааны зах зээлд мэргэшсэн, дотоодын хөрөнгө оруулагчдад зохицуулалттай бөгөөд нэгдсэн хэрэгслээр дамжуулан дэлхийн зах зээлд гарах боломжийг олгодог хувийн хөрөнгө оруулалтын сан юм. Бид Хойд Америк, Европ, Азийн тэргүүлэх биржүүдэд хөрөнгө оруулж, урт хугацааны өсөлтийн стратегийг тактикийн уян хатан шийдвэрүүдтэй хослуулан, хөрөнгө оруулагчдынхаа үнэ цэнийг тогтвортой өсгөхийг зорьдог. Сангийн үйл ажиллагааг Санхүүгийн Зохицуулах Хорооны №380/11 тоот тусгай зөвшөөрөлтэй Улаанбаатар Ассет Менежмент ХХК мэргэжлийн түвшинд удирдан зохион байгуулдаг."
+        ],
+        bodyEn: [
+          "Misheel Fund is a private investment fund that gives qualified investors structured access to international equity markets through a single regulated vehicle. The fund invests across global exchanges — North America, Europe, and Asia — combining growth-oriented positions with selective tactical exposures, with the aim of generating long-term capital appreciation for its investors.",
+          "The fund is managed by Ulaanbaatar Asset Management LLC, regulated by the Financial Regulatory Commission of Mongolia under license №380/11."
+        ]
+      },
+      {
+        headingMn: "Хөрөнгө оруулалтын бодлого",
+        headingEn: "Investment approach",
+        bodyMn: [
+          "Бид олон улсын хувьцаа, биржээр арилжаалагддаг сан буюу ETF болон тэдгээртэй холбогдох санхүүгийн хэрэгслүүдээс бүрдсэн, салбар болон валютын өндөр төрөлжилттэй багцыг удирддаг. Хөрөнгө оруулалтын шийдвэр гаргахдаа суурь шинжилгээний гүн гүнзгий судалгаанд тулгуурлаж, техникийн шинжилгээ болон эрсдэлийн удирдлагын хатуу сахилга батыг баримталдаг."
+        ],
+        bodyEn: [
+          "The fund holds a diversified portfolio of international equities, ETFs, and related instruments across multiple sectors and currencies. Positions are taken based on fundamental conviction, supported by technical analysis and disciplined risk management."
+        ]
+      },
+      {
+        headingMn: "Бидний оршин тогтнох шалтгаан",
+        headingEn: "Why this fund exists",
+        bodyMn: [
+          "Олон улсын санхүүгийн зах зээл нь олон төрлийн бирж, валютын зөрүү, цагийн бүс болон хууль эрх зүйн ялгаатай орчныг даван туулж чадсан хөрөнгө оруулагчдад асар их боломжийг олгодог. Гэвч Монголын ихэнх хөрөнгө оруулагчдын хувьд санхүүгийн чадамжаас илүүтэйгээр олон улсын багцыг удирдах дэд бүтэц, мэргэжлийн судалгаа болон үйл ажиллагааны нарийн төвөгтэй байдал нь дэлхийн зах зээлд шууд нэвтрэхэд гол саад тотгор болдог юм.",
+          "Мишээл Фанд яг энэ орон зайг нөхдөг. Бид дотоодын хөрөнгө оруулагчдад бие даан нэвтрэхэд хүндрэлтэй дэлхийн зах зээлд институцийн түвшний хүртээмжийг олгож байна. Ингэхдээ мэргэжлийн багийн гүнзгий судалгаа, олон улсын гүйцэтгэлийн дэд бүтэц болон эрсдэлийн удирдлагын цогц системийг хамтад нь санал болгож байна."
+        ],
+        bodyEn: [
+          "International markets offer real opportunities to investors who can navigate multiple exchanges, currencies, time zones, and regulatory regimes. Most Mongolian investors cannot — not because they lack capital, but because the infrastructure, the research, and the operational complexity of running a multi-currency international book are out of reach.",
+          "Misheel Fund closes that gap. It gives Mongolian investors institutional-grade access to markets they would otherwise have to navigate alone, with the research depth, execution infrastructure, and risk discipline of a professional management team."
+        ]
+      }
+    ],
+    committee: [
+      { nameMn: "Н. Монсор", nameEn: "N. Monsor", roleMn: "Гүйцэтгэх захирал, ТУЗ-гишүүн", roleEn: "CEO, Board member", photo: "/assets/team/monsor.png" },
+      { nameMn: "А. Уянга", nameEn: "A. Uyanga", roleMn: "ХОС зөвлөх", roleEn: "Investment fund advisor", photo: "/assets/team/uyanga.png" },
+      { nameMn: "А. Идэрбат", nameEn: "A. Iderbat", roleMn: "ХОС зөвлөх", roleEn: "Investment fund advisor", photo: "/assets/team/iderbat.png" }
+    ]
+  },
+  {
+    id: "kk",
+    nameMn: "КК Рийл Истэйт Фанд",
+    nameEn: "KK Real Estate Fund",
+    comingSoon: true,
+    sections: [],
+    committee: []
+  }
+];
+
+export async function getFunds(): Promise<Fund[] | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from("site_settings")
+    .select("value")
+    .eq("key", "funds")
+    .maybeSingle();
+  if (error) throw error;
+  const value = data?.value as Fund[] | undefined;
+  return value && Array.isArray(value) ? value : null;
+}
+
+export async function saveFunds(funds: Fund[]): Promise<void> {
+  const db = ensure();
+  const { error } = await db.from("site_settings").upsert({ key: "funds", value: funds });
+  if (error) throw error;
+}
+
+export async function ensureFunds(): Promise<Fund[]> {
+  await ensureSeed("funds", async () => {
+    if (!(await getFunds())) await saveFunds(DEFAULT_FUNDS);
+  });
+  return (await getFunds()) ?? DEFAULT_FUNDS;
+}
+
+// ---------- Report categories (stored in site_settings under key 'report_categories') ----------
+export type ReportCategory = { key: string; title_mn: string; title_en: string; sort_order: number };
+
+export const DEFAULT_REPORT_CATEGORIES: ReportCategory[] = [
+  { key: "tailan", title_mn: "Тайлан", title_en: "Reports", sort_order: 0 },
+  { key: "bodlogo", title_mn: "Бодлого", title_en: "Policy", sort_order: 1 },
+  { key: "juram", title_mn: "Журам", title_en: "Procedures", sort_order: 2 },
+  { key: "udirdamj", title_mn: "Удирдамж", title_en: "Guidelines", sort_order: 3 }
+];
+
+export async function getReportCategories(): Promise<ReportCategory[] | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from("site_settings")
+    .select("value")
+    .eq("key", "report_categories")
+    .maybeSingle();
+  if (error) throw error;
+  const value = data?.value as ReportCategory[] | undefined;
+  return value && Array.isArray(value) ? value : null;
+}
+
+export async function saveReportCategories(cats: ReportCategory[]): Promise<void> {
+  const db = ensure();
+  const { error } = await db.from("site_settings").upsert({ key: "report_categories", value: cats });
+  if (error) throw error;
+}
+
+export async function ensureReportCategories(): Promise<ReportCategory[]> {
+  await ensureSeed("report_categories", async () => {
+    if (!(await getReportCategories())) await saveReportCategories(DEFAULT_REPORT_CATEGORIES);
+  });
+  return (await getReportCategories()) ?? DEFAULT_REPORT_CATEGORIES;
+}
+
 // ---------- Auto-seed (runs once per table, race-safe) ----------
 // Memoize the seed op so React's double-mount (dev) can't insert twice.
 const seedGuards: Record<string, Promise<void>> = {};

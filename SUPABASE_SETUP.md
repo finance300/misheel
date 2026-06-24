@@ -187,6 +187,35 @@ create policy "team files deletable" on storage.objects for delete
 ```
 
 That's it — the admin panel (Ерөнхий админ → tabs) now manages every section.
-Each section falls back to the built-in content until you add rows. To make
-yourself a **general admin**, open the **Users** tab and set your role (or run
-`update public.profiles set role='general_admin' where email='you@example.com';`).
+Each section falls back to the built-in content until you add rows.
+
+---
+
+# 6. Admin dashboard layout (admin-only build)
+
+The dashboard has four tabs:
+
+- **About us** — Mission/Values panels, Timeline, Management team.
+- **Investment funds** — add/delete funds, edit each fund's sections (e.g. "Overview")
+  and Investment committee. Stored as JSON in `site_settings` under key `funds`
+  (auto-seeded from the built-in content the first time you open the tab).
+- **Reports & Regulations** — manage categories (e.g. "Procedures") **and** the PDFs
+  inside them. Categories are stored in `site_settings` under key `report_categories`
+  (auto-seeded); PDFs live in the `reports` table/bucket.
+- **General settings** — test the stock-data API (Finnhub / Twelve Data) and edit the
+  phone, email, and location.
+
+**One-time SQL for custom report categories:** because categories are now free-form,
+the `reports.group_key` column must NOT have a fixed `check` constraint. If you created
+the `reports` table earlier with one, re-run `cms_setup.sql` (it now drops any check
+constraint on `public.reports`), or run:
+
+```sql
+do $$
+declare c text;
+begin
+  for c in select conname from pg_constraint
+    where conrelid = 'public.reports'::regclass and contype = 'c'
+  loop execute format('alter table public.reports drop constraint %I', c); end loop;
+end $$;
+```

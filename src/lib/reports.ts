@@ -1,11 +1,9 @@
 import { supabase } from "./supabase";
 
-export const REPORT_GROUPS = ["tailan", "bodlogo", "juram", "udirdamj"] as const;
-export type ReportGroupKey = (typeof REPORT_GROUPS)[number];
-
+// Category keys are managed by the admin (cms.ReportCategory) and stored free-form.
 export type ReportRecord = {
   id: string;
-  group_key: ReportGroupKey;
+  group_key: string;
   title: string;
   file_path: string;
   sort_order: number;
@@ -46,7 +44,7 @@ export async function uploadReportFile(file: File): Promise<string> {
 }
 
 export async function createReport(input: {
-  group_key: ReportGroupKey;
+  group_key: string;
   title: string;
   file_path: string;
 }): Promise<void> {

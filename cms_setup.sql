@@ -16,16 +16,31 @@ begin
     using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated')$p$, tbl);
 end; $$;
 
--- Reports & Regulations documents
+-- Reports & Regulations documents.
+-- group_key is a free-form category key managed by the admin (categories live in
+-- site_settings under 'report_categories'), so there is NO check constraint on it.
 create table if not exists public.reports (
   id uuid primary key default gen_random_uuid(),
-  group_key text not null check (group_key in ('activity','audit','regulations')),
+  group_key text not null,
   title text not null default '',
   file_path text not null default '',
   sort_order int not null default 0,
   created_at timestamptz not null default now()
 );
 select public.apply_cms_policies('public.reports');
+
+-- If the reports table was created earlier with a fixed check constraint on
+-- group_key, drop it so custom category keys are accepted.
+do $$
+declare c text;
+begin
+  for c in
+    select conname from pg_constraint
+    where conrelid = 'public.reports'::regclass and contype = 'c'
+  loop
+    execute format('alter table public.reports drop constraint %I', c);
+  end loop;
+end $$;
 
 -- Mission / Values cards (rotating carousel)
 create table if not exists public.home_cards (
